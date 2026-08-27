@@ -5,3 +5,11 @@ dist/
 kestrel-data.json
 *.tar.gz
 .DS_Store
+
+# local helper scripts + run artifacts
+macos-*.command
+check-ci.command
+*.command
+*.log
+mac-demo/
+_to_delete_tarball.tar.gz
