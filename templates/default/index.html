@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>My App</title>
+<style>
+  body { margin:0; font-family: system-ui, sans-serif; background:#F7F8FA; color:#1C2430;
+         display:grid; place-items:center; min-height:100vh; }
+  main { width:min(480px, 90vw); text-align:center; }
+  h1 { font-size:26px; } h1 span { color:#B4502A; }
+  .visits { font-family:monospace; font-size:13px; color:#7A8798; margin-bottom:24px; }
+  input, button { font:15px system-ui; padding:9px 14px; border-radius:8px; }
+  input { border:1px solid #D9DEE6; width:200px; }
+  button { border:0; background:#B4502A; color:#fff; font-weight:600; cursor:pointer; }
+  #msg { margin-top:16px; min-height:1.4em; color:#2E7D4F; font-family:monospace; font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Welcome to <span>Kestrel</span></h1>
+  <div class="visits" id="visits">…</div>
+  <input id="name" placeholder="Your name">
+  <button id="greet">Greet</button>
+  <div id="msg"></div>
+</main>
+<script type="module">
+  // Typed stubs generated from native.js by `kestrel typegen`:
+  import { greet, visitCount } from "./native-client.js";
+
+  visitCount().then(n => {
+    document.getElementById("visits").textContent =
+      `you have opened this app ${n} time${n === 1 ? "" : "s"} (persisted by native.js)`;
+  });
+
+  document.getElementById("greet").onclick = async () => {
+    const name = document.getElementById("name").value || "stranger";
+    document.getElementById("msg").textContent = await greet({ name });
+  };
+</script>
+</body>
+</html>

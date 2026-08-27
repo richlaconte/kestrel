@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default capability for all kestrel-hosted windows",
+  "windows": ["*"],
+  "remote": {
+    "urls": ["http://localhost:*", "http://127.0.0.1:*"]
+  },
+  "permissions": ["core:default"]
+}

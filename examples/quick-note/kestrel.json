@@ -1,0 +1,8 @@
+{
+  "appId": "quick-note",
+  "title": "Quick Note",
+  "width": 640,
+  "height": 480,
+  "frontend": ".",
+  "native": "native.js"
+}

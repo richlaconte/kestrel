@@ -1,0 +1,8 @@
+{
+  "appId": "my-app",
+  "title": "My App",
+  "width": 720,
+  "height": 520,
+  "frontend": ".",
+  "native": "native.js"
+}

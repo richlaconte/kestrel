@@ -1,0 +1,13 @@
+{
+  "name": "kestrel-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kestrel (working codename): just React. Actually native. Nothing else to learn.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:host": "cd host && cargo build --release"
+  }
+}

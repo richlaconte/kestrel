@@ -1,0 +1,7 @@
+node_modules/
+host/target/
+dist/
+.kestrel/
+kestrel-data.json
+*.tar.gz
+.DS_Store

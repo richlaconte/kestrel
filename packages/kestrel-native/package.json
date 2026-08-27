@@ -1,0 +1,9 @@
+{
+  "name": "kestrel-native",
+  "version": "0.1.0",
+  "description": "Typed client runtime for the Kestrel native API (kestrel/native).",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

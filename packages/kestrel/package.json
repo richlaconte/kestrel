@@ -1,0 +1,16 @@
+{
+  "name": "kestrel",
+  "version": "0.1.0",
+  "description": "The Kestrel CLI: create, dev, typegen, build.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "kestrel": "bin/kestrel.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "typescript": "^5.5.0"
+  }
+}

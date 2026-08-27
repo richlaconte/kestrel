@@ -1,0 +1,755 @@
++ export 'PATH=/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++ PATH='/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++ '[' -f /Users/richardlaconte/.cargo/env ']'
++ source /Users/richardlaconte/.cargo/env
+++ case ":${PATH}:" in
++ export NVM_DIR=/Users/richardlaconte/.nvm
++ NVM_DIR=/Users/richardlaconte/.nvm
++ '[' -s /Users/richardlaconte/.nvm/nvm.sh ']'
++ . /Users/richardlaconte/.nvm/nvm.sh
+++ NVM_SCRIPT_SOURCE=']'
+++ '[' -z -q ']'
+++ nvm_is_zsh
+++ '[' -n '' ']'
+++ '[' -z /Users/richardlaconte/.nvm ']'
+++ case $NVM_DIR in
+++ unset NVM_SCRIPT_SOURCE
+++ nvm_process_parameters
+++ local NVM_AUTO_MODE
+++ NVM_AUTO_MODE=use
+++ '[' 0 -ne 0 ']'
+++ nvm_auto use
+++ local NVM_MODE
+++ NVM_MODE=use
+++ local VERSION
+++ local NVM_CURRENT
+++ '[' _use = _install ']'
+++ '[' _use = _use ']'
++++ nvm_ls_current
++++ local NVM_LS_CURRENT_NODE_PATH
+++++ command which node
++++ NVM_LS_CURRENT_NODE_PATH=/opt/homebrew/bin/node
+++++ nvm_version_dir iojs
+++++ local NVM_WHICH_DIR
+++++ NVM_WHICH_DIR=iojs
+++++ '[' -z iojs ']'
+++++ '[' iojs = new ']'
+++++ '[' _iojs = _iojs ']'
+++++ nvm_echo /Users/richardlaconte/.nvm/versions/io.js
+++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/io.js
++++ nvm_tree_contains_path /Users/richardlaconte/.nvm/versions/io.js /opt/homebrew/bin/node
++++ local tree
++++ tree=/Users/richardlaconte/.nvm/versions/io.js
++++ local node_path
++++ node_path=/opt/homebrew/bin/node
++++ '[' @/Users/richardlaconte/.nvm/versions/io.js@ = @@ ']'
++++ '[' @/opt/homebrew/bin/node@ = @@ ']'
++++ local previous_pathdir
++++ previous_pathdir=/opt/homebrew/bin/node
++++ local pathdir
+++++ dirname /opt/homebrew/bin/node
++++ pathdir=/opt/homebrew/bin
++++ '[' /opt/homebrew/bin '!=' '' ']'
++++ '[' /opt/homebrew/bin '!=' . ']'
++++ '[' /opt/homebrew/bin '!=' / ']'
++++ '[' /opt/homebrew/bin '!=' /Users/richardlaconte/.nvm/versions/io.js ']'
++++ '[' /opt/homebrew/bin '!=' /opt/homebrew/bin/node ']'
++++ previous_pathdir=/opt/homebrew/bin
+++++ dirname /opt/homebrew/bin
++++ pathdir=/opt/homebrew
++++ '[' /opt/homebrew '!=' '' ']'
++++ '[' /opt/homebrew '!=' . ']'
++++ '[' /opt/homebrew '!=' / ']'
++++ '[' /opt/homebrew '!=' /Users/richardlaconte/.nvm/versions/io.js ']'
++++ '[' /opt/homebrew '!=' /opt/homebrew/bin ']'
++++ previous_pathdir=/opt/homebrew
+++++ dirname /opt/homebrew
++++ pathdir=/opt
++++ '[' /opt '!=' '' ']'
++++ '[' /opt '!=' . ']'
++++ '[' /opt '!=' / ']'
++++ '[' /opt '!=' /Users/richardlaconte/.nvm/versions/io.js ']'
++++ '[' /opt '!=' /opt/homebrew ']'
++++ previous_pathdir=/opt
+++++ dirname /opt
++++ pathdir=/
++++ '[' / '!=' '' ']'
++++ '[' / '!=' . ']'
++++ '[' / '!=' / ']'
++++ '[' / = /Users/richardlaconte/.nvm/versions/io.js ']'
++++ nvm_tree_contains_path /Users/richardlaconte/.nvm /opt/homebrew/bin/node
++++ local tree
++++ tree=/Users/richardlaconte/.nvm
++++ local node_path
++++ node_path=/opt/homebrew/bin/node
++++ '[' @/Users/richardlaconte/.nvm@ = @@ ']'
++++ '[' @/opt/homebrew/bin/node@ = @@ ']'
++++ local previous_pathdir
++++ previous_pathdir=/opt/homebrew/bin/node
++++ local pathdir
+++++ dirname /opt/homebrew/bin/node
++++ pathdir=/opt/homebrew/bin
++++ '[' /opt/homebrew/bin '!=' '' ']'
++++ '[' /opt/homebrew/bin '!=' . ']'
++++ '[' /opt/homebrew/bin '!=' / ']'
++++ '[' /opt/homebrew/bin '!=' /Users/richardlaconte/.nvm ']'
++++ '[' /opt/homebrew/bin '!=' /opt/homebrew/bin/node ']'
++++ previous_pathdir=/opt/homebrew/bin
+++++ dirname /opt/homebrew/bin
++++ pathdir=/opt/homebrew
++++ '[' /opt/homebrew '!=' '' ']'
++++ '[' /opt/homebrew '!=' . ']'
++++ '[' /opt/homebrew '!=' / ']'
++++ '[' /opt/homebrew '!=' /Users/richardlaconte/.nvm ']'
++++ '[' /opt/homebrew '!=' /opt/homebrew/bin ']'
++++ previous_pathdir=/opt/homebrew
+++++ dirname /opt/homebrew
++++ pathdir=/opt
++++ '[' /opt '!=' '' ']'
++++ '[' /opt '!=' . ']'
++++ '[' /opt '!=' / ']'
++++ '[' /opt '!=' /Users/richardlaconte/.nvm ']'
++++ '[' /opt '!=' /opt/homebrew ']'
++++ previous_pathdir=/opt
+++++ dirname /opt
++++ pathdir=/
++++ '[' / '!=' '' ']'
++++ '[' / '!=' . ']'
++++ '[' / '!=' / ']'
++++ '[' / = /Users/richardlaconte/.nvm ']'
++++ nvm_echo system
++++ command printf '%s\n' system
+++ NVM_CURRENT=system
+++ '[' _system = _none ']'
+++ '[' _system = _system ']'
++++ nvm_resolve_local_alias default
+++ VERSION=v24.18.0
+++ '[' -n v24.18.0 ']'
+++ nvm use --silent v24.18.0
+++ '[' 3 -lt 1 ']'
+++ local DEFAULT_IFS
++++ nvm_echo t
++++ command printf '%s\n' t
++++ command tr t '\t'
++++ tr t '\t'
+++ DEFAULT_IFS=' 	
+'
+++ '[' hxB '!=' hxB ']'
+++ '[' hxB '!=' hxB ']'
+++ '[' ' 	
+' '!=' ' 	
+' ']'
+++ local i
+++ for i in '"$@"'
+++ case $i in
+++ for i in '"$@"'
+++ case $i in
+++ for i in '"$@"'
+++ case $i in
+++ local COMMAND
+++ COMMAND=use
+++ shift
+++ local VERSION
+++ local ADDITIONAL_PARAMETERS
+++ case $COMMAND in
+++ local PROVIDED_VERSION
+++ local NVM_SILENT
+++ local NVM_SILENT_ARG
+++ local NVM_DELETE_PREFIX
+++ NVM_DELETE_PREFIX=0
+++ local NVM_LTS
+++ '[' 2 -ne 0 ']'
+++ case "$1" in
+++ NVM_SILENT=1
+++ NVM_SILENT_ARG=--silent
+++ shift
+++ '[' 1 -ne 0 ']'
+++ case "$1" in
+++ '[' -n v24.18.0 ']'
+++ PROVIDED_VERSION=v24.18.0
+++ shift
+++ '[' 0 -ne 0 ']'
+++ '[' -n '' ']'
+++ '[' -z v24.18.0 ']'
++++ nvm_match_version v24.18.0
++++ local NVM_IOJS_PREFIX
+++++ nvm_iojs_prefix
+++++ nvm_echo iojs
+++++ command printf '%s\n' iojs
++++ NVM_IOJS_PREFIX=iojs
++++ local PROVIDED_VERSION
++++ PROVIDED_VERSION=v24.18.0
++++ case "_${PROVIDED_VERSION}" in
++++ nvm_version v24.18.0
++++ local PATTERN
++++ PATTERN=v24.18.0
++++ local VERSION
++++ '[' -z v24.18.0 ']'
++++ '[' v24.18.0 = current ']'
++++ local NVM_NODE_PREFIX
+++++ nvm_node_prefix
+++++ nvm_echo node
+++++ command printf '%s\n' node
++++ NVM_NODE_PREFIX=node
++++ case "_${PATTERN}" in
+++++ nvm_ls v24.18.0
+++++ local PATTERN
+++++ PATTERN=v24.18.0
+++++ local VERSIONS
+++++ VERSIONS=
+++++ '[' v24.18.0 = current ']'
+++++ local NVM_IOJS_PREFIX
+++++ command tail -1
+++++ tail -1
++++++ nvm_iojs_prefix
++++++ nvm_echo iojs
++++++ command printf '%s\n' iojs
+++++ NVM_IOJS_PREFIX=iojs
+++++ local NVM_NODE_PREFIX
++++++ nvm_node_prefix
++++++ nvm_echo node
++++++ command printf '%s\n' node
+++++ NVM_NODE_PREFIX=node
+++++ local NVM_VERSION_DIR_IOJS
++++++ nvm_version_dir iojs
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=iojs
++++++ '[' -z iojs ']'
++++++ '[' iojs = new ']'
++++++ '[' _iojs = _iojs ']'
++++++ nvm_echo /Users/richardlaconte/.nvm/versions/io.js
++++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/io.js
+++++ NVM_VERSION_DIR_IOJS=/Users/richardlaconte/.nvm/versions/io.js
+++++ local NVM_VERSION_DIR_NEW
++++++ nvm_version_dir new
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=new
++++++ '[' -z new ']'
++++++ '[' new = new ']'
++++++ nvm_echo /Users/richardlaconte/.nvm/versions/node
++++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node
+++++ NVM_VERSION_DIR_NEW=/Users/richardlaconte/.nvm/versions/node
+++++ local NVM_VERSION_DIR_OLD
++++++ nvm_version_dir old
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=old
++++++ '[' -z old ']'
++++++ '[' old = new ']'
++++++ '[' _old = _iojs ']'
++++++ '[' _old = _old ']'
++++++ nvm_echo /Users/richardlaconte/.nvm
++++++ command printf '%s\n' /Users/richardlaconte/.nvm
+++++ NVM_VERSION_DIR_OLD=/Users/richardlaconte/.nvm
+++++ case "${PATTERN}" in
+++++ nvm_resolve_local_alias v24.18.0
+++++ '[' -z v24.18.0 ']'
+++++ local VERSION
+++++ local EXIT_CODE
++++++ nvm_resolve_alias v24.18.0
++++++ '[' -z v24.18.0 ']'
++++++ local PATTERN
++++++ PATTERN=v24.18.0
++++++ local ALIAS
++++++ ALIAS=v24.18.0
++++++ local ALIAS_TEMP
++++++ local SEEN_ALIASES
++++++ SEEN_ALIASES=v24.18.0
++++++ true
+++++++ nvm_alias v24.18.0
+++++++ nvm_echo
+++++++ command printf '%s\n' ''
++++++ ALIAS_TEMP=
++++++ '[' -z '' ']'
++++++ break
++++++ '[' -n v24.18.0 ']'
++++++ '[' _v24.18.0 '!=' _v24.18.0 ']'
++++++ nvm_validate_implicit_alias v24.18.0
++++++ return 2
+++++ VERSION=
+++++ EXIT_CODE=2
+++++ '[' -z '' ']'
+++++ return 2
++++++ nvm_ensure_version_prefix v24.18.0
++++++ local NVM_VERSION
+++++++ nvm_strip_iojs_prefix v24.18.0
+++++++ local NVM_IOJS_PREFIX
+++++++ command sed -e 's/^\([0-9]\)/v\1/g'
+++++++ sed -e 's/^\([0-9]\)/v\1/g'
++++++++ nvm_iojs_prefix
++++++++ nvm_echo iojs
++++++++ command printf '%s\n' iojs
+++++++ NVM_IOJS_PREFIX=iojs
+++++++ '[' v24.18.0 = iojs ']'
+++++++ nvm_echo v24.18.0
+++++++ command printf '%s\n' v24.18.0
++++++ NVM_VERSION=v24.18.0
++++++ nvm_is_iojs_version v24.18.0
++++++ case "${1-}" in
++++++ return 1
++++++ nvm_echo v24.18.0
++++++ command printf '%s\n' v24.18.0
+++++ PATTERN=v24.18.0
+++++ '[' v24.18.0 = N/A ']'
+++++ local NVM_PATTERN_STARTS_WITH_V
+++++ case $PATTERN in
+++++ NVM_PATTERN_STARTS_WITH_V=true
+++++ '[' true = true ']'
++++++ nvm_num_version_groups v24.18.0
++++++ local VERSION
++++++ VERSION=v24.18.0
++++++ VERSION=24.18.0
++++++ VERSION=24.18.0
++++++ '[' -z 24.18.0 ']'
++++++ local NVM_NUM_DOTS
+++++++ nvm_echo 24.18.0
+++++++ command printf '%s\n' 24.18.0
+++++++ command sed -e 's/[^\.]//g'
+++++++ sed -e 's/[^\.]//g'
++++++ NVM_NUM_DOTS=..
++++++ local NVM_NUM_GROUPS
++++++ NVM_NUM_GROUPS=...
++++++ nvm_echo 3
++++++ command printf '%s\n' 3
+++++ '[' _3 = _3 ']'
+++++ nvm_is_version_installed v24.18.0
+++++ '[' -z v24.18.0 ']'
+++++ local NVM_NODE_BINARY
+++++ NVM_NODE_BINARY=node
++++++ nvm_get_os
++++++ local NVM_UNAME
+++++++ command uname -a
+++++++ uname -a
++++++ NVM_UNAME='Darwin Richards-MacBook-Pro-2.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64'
++++++ local NVM_OS
++++++ case "${NVM_UNAME}" in
++++++ NVM_OS=darwin
++++++ nvm_echo darwin
++++++ command printf '%s\n' darwin
+++++ '[' _darwin = _win ']'
++++++ nvm_version_path v24.18.0
+++++ '[' -x /Users/richardlaconte/.nvm/versions/node/v24.18.0/bin/node ']'
+++++ return 0
+++++ VERSIONS=v24.18.0
+++++ '[' '' = true ']'
+++++ '[' -z v24.18.0 ']'
+++++ nvm_echo v24.18.0
+++++ command printf '%s\n' v24.18.0
++++ VERSION=v24.18.0
++++ '[' -z v24.18.0 ']'
++++ '[' _v24.18.0 = _N/A ']'
++++ nvm_echo v24.18.0
++++ command printf '%s\n' v24.18.0
+++ VERSION=v24.18.0
+++ '[' -z v24.18.0 ']'
+++ '[' _v24.18.0 = _system ']'
+++ '[' _v24.18.0 = $'_â\210\236' ']'
+++ '[' v24.18.0 = N/A ']'
+++ nvm_ensure_version_installed v24.18.0
+++ local PROVIDED_VERSION
+++ PROVIDED_VERSION=v24.18.0
+++ '[' v24.18.0 = system ']'
+++ local LOCAL_VERSION
+++ local EXIT_CODE
++++ nvm_version v24.18.0
++++ local PATTERN
++++ PATTERN=v24.18.0
++++ local VERSION
++++ '[' -z v24.18.0 ']'
++++ '[' v24.18.0 = current ']'
++++ local NVM_NODE_PREFIX
+++++ nvm_node_prefix
+++++ nvm_echo node
+++++ command printf '%s\n' node
++++ NVM_NODE_PREFIX=node
++++ case "_${PATTERN}" in
+++++ nvm_ls v24.18.0
+++++ local PATTERN
+++++ PATTERN=v24.18.0
+++++ local VERSIONS
+++++ VERSIONS=
+++++ '[' v24.18.0 = current ']'
+++++ local NVM_IOJS_PREFIX
+++++ command tail -1
+++++ tail -1
++++++ nvm_iojs_prefix
++++++ nvm_echo iojs
++++++ command printf '%s\n' iojs
+++++ NVM_IOJS_PREFIX=iojs
+++++ local NVM_NODE_PREFIX
++++++ nvm_node_prefix
++++++ nvm_echo node
++++++ command printf '%s\n' node
+++++ NVM_NODE_PREFIX=node
+++++ local NVM_VERSION_DIR_IOJS
++++++ nvm_version_dir iojs
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=iojs
++++++ '[' -z iojs ']'
++++++ '[' iojs = new ']'
++++++ '[' _iojs = _iojs ']'
++++++ nvm_echo /Users/richardlaconte/.nvm/versions/io.js
++++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/io.js
+++++ NVM_VERSION_DIR_IOJS=/Users/richardlaconte/.nvm/versions/io.js
+++++ local NVM_VERSION_DIR_NEW
++++++ nvm_version_dir new
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=new
++++++ '[' -z new ']'
++++++ '[' new = new ']'
++++++ nvm_echo /Users/richardlaconte/.nvm/versions/node
++++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node
+++++ NVM_VERSION_DIR_NEW=/Users/richardlaconte/.nvm/versions/node
+++++ local NVM_VERSION_DIR_OLD
++++++ nvm_version_dir old
++++++ local NVM_WHICH_DIR
++++++ NVM_WHICH_DIR=old
++++++ '[' -z old ']'
++++++ '[' old = new ']'
++++++ '[' _old = _iojs ']'
++++++ '[' _old = _old ']'
++++++ nvm_echo /Users/richardlaconte/.nvm
++++++ command printf '%s\n' /Users/richardlaconte/.nvm
+++++ NVM_VERSION_DIR_OLD=/Users/richardlaconte/.nvm
+++++ case "${PATTERN}" in
+++++ nvm_resolve_local_alias v24.18.0
+++++ '[' -z v24.18.0 ']'
+++++ local VERSION
+++++ local EXIT_CODE
++++++ nvm_resolve_alias v24.18.0
++++++ '[' -z v24.18.0 ']'
++++++ local PATTERN
++++++ PATTERN=v24.18.0
++++++ local ALIAS
++++++ ALIAS=v24.18.0
++++++ local ALIAS_TEMP
++++++ local SEEN_ALIASES
++++++ SEEN_ALIASES=v24.18.0
++++++ true
+++++++ nvm_alias v24.18.0
+++++++ nvm_echo
+++++++ command printf '%s\n' ''
++++++ ALIAS_TEMP=
++++++ '[' -z '' ']'
++++++ break
++++++ '[' -n v24.18.0 ']'
++++++ '[' _v24.18.0 '!=' _v24.18.0 ']'
++++++ nvm_validate_implicit_alias v24.18.0
++++++ return 2
+++++ VERSION=
+++++ EXIT_CODE=2
+++++ '[' -z '' ']'
+++++ return 2
++++++ nvm_ensure_version_prefix v24.18.0
++++++ local NVM_VERSION
+++++++ nvm_strip_iojs_prefix v24.18.0
+++++++ local NVM_IOJS_PREFIX
+++++++ command sed -e 's/^\([0-9]\)/v\1/g'
+++++++ sed -e 's/^\([0-9]\)/v\1/g'
++++++++ nvm_iojs_prefix
++++++++ nvm_echo iojs
++++++++ command printf '%s\n' iojs
+++++++ NVM_IOJS_PREFIX=iojs
+++++++ '[' v24.18.0 = iojs ']'
+++++++ nvm_echo v24.18.0
+++++++ command printf '%s\n' v24.18.0
++++++ NVM_VERSION=v24.18.0
++++++ nvm_is_iojs_version v24.18.0
++++++ case "${1-}" in
++++++ return 1
++++++ nvm_echo v24.18.0
++++++ command printf '%s\n' v24.18.0
+++++ PATTERN=v24.18.0
+++++ '[' v24.18.0 = N/A ']'
+++++ local NVM_PATTERN_STARTS_WITH_V
+++++ case $PATTERN in
+++++ NVM_PATTERN_STARTS_WITH_V=true
+++++ '[' true = true ']'
++++++ nvm_num_version_groups v24.18.0
++++++ local VERSION
++++++ VERSION=v24.18.0
++++++ VERSION=24.18.0
++++++ VERSION=24.18.0
++++++ '[' -z 24.18.0 ']'
++++++ local NVM_NUM_DOTS
+++++++ nvm_echo 24.18.0
+++++++ command printf '%s\n' 24.18.0
+++++++ command sed -e 's/[^\.]//g'
+++++++ sed -e 's/[^\.]//g'
++++++ NVM_NUM_DOTS=..
++++++ local NVM_NUM_GROUPS
++++++ NVM_NUM_GROUPS=...
++++++ nvm_echo 3
++++++ command printf '%s\n' 3
+++++ '[' _3 = _3 ']'
+++++ nvm_is_version_installed v24.18.0
+++++ '[' -z v24.18.0 ']'
+++++ local NVM_NODE_BINARY
+++++ NVM_NODE_BINARY=node
++++++ nvm_get_os
++++++ local NVM_UNAME
+++++++ command uname -a
+++++++ uname -a
++++++ NVM_UNAME='Darwin Richards-MacBook-Pro-2.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64'
++++++ local NVM_OS
++++++ case "${NVM_UNAME}" in
++++++ NVM_OS=darwin
++++++ nvm_echo darwin
++++++ command printf '%s\n' darwin
+++++ '[' _darwin = _win ']'
++++++ nvm_version_path v24.18.0
+++++ '[' -x /Users/richardlaconte/.nvm/versions/node/v24.18.0/bin/node ']'
+++++ return 0
+++++ VERSIONS=v24.18.0
+++++ '[' '' = true ']'
+++++ '[' -z v24.18.0 ']'
+++++ nvm_echo v24.18.0
+++++ command printf '%s\n' v24.18.0
++++ VERSION=v24.18.0
++++ '[' -z v24.18.0 ']'
++++ '[' _v24.18.0 = _N/A ']'
++++ nvm_echo v24.18.0
++++ command printf '%s\n' v24.18.0
+++ LOCAL_VERSION=v24.18.0
+++ EXIT_CODE=0
+++ local NVM_VERSION_DIR
+++ '[' 0 '!=' 0 ']'
+++ nvm_is_version_installed v24.18.0
+++ '[' -z v24.18.0 ']'
+++ local NVM_NODE_BINARY
+++ NVM_NODE_BINARY=node
++++ nvm_get_os
++++ local NVM_UNAME
+++++ command uname -a
+++++ uname -a
++++ NVM_UNAME='Darwin Richards-MacBook-Pro-2.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64'
++++ local NVM_OS
++++ case "${NVM_UNAME}" in
++++ NVM_OS=darwin
++++ nvm_echo darwin
++++ command printf '%s\n' darwin
+++ '[' _darwin = _win ']'
++++ nvm_version_path v24.18.0
+++ '[' -x /Users/richardlaconte/.nvm/versions/node/v24.18.0/bin/node ']'
+++ return 0
+++ local NVM_VERSION_DIR
++++ nvm_version_path v24.18.0
++++ local VERSION
++++ VERSION=v24.18.0
++++ '[' -z v24.18.0 ']'
++++ nvm_is_iojs_version v24.18.0
++++ case "${1-}" in
++++ return 1
++++ nvm_version_greater 0.12.0 v24.18.0
++++ command awk 'BEGIN {
+    if (ARGV[1] == "" || ARGV[2] == "") exit(1)
+    split(ARGV[1], a, /\./);
+    split(ARGV[2], b, /\./);
+    for (i=1; i<=3; i++) {
+      if (a[i] && a[i] !~ /^[0-9]+$/) exit(2);
+      if (b[i] && b[i] !~ /^[0-9]+$/) { exit(0); }
+      if (a[i] < b[i]) exit(3);
+      else if (a[i] > b[i]) exit(0);
+    }
+    exit(4)
+  }' 0.12.0 24.18.0
++++ awk 'BEGIN {
+    if (ARGV[1] == "" || ARGV[2] == "") exit(1)
+    split(ARGV[1], a, /\./);
+    split(ARGV[2], b, /\./);
+    for (i=1; i<=3; i++) {
+      if (a[i] && a[i] !~ /^[0-9]+$/) exit(2);
+      if (b[i] && b[i] !~ /^[0-9]+$/) { exit(0); }
+      if (a[i] < b[i]) exit(3);
+      else if (a[i] > b[i]) exit(0);
+    }
+    exit(4)
+  }' 0.12.0 24.18.0
+++++ nvm_version_dir new
+++++ local NVM_WHICH_DIR
+++++ NVM_WHICH_DIR=new
+++++ '[' -z new ']'
+++++ '[' new = new ']'
+++++ nvm_echo /Users/richardlaconte/.nvm/versions/node
+++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0
+++ NVM_VERSION_DIR=/Users/richardlaconte/.nvm/versions/node/v24.18.0
++++ nvm_change_path '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin' /bin /Users/richardlaconte/.nvm/versions/node/v24.18.0
++++ '[' -z '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin' ']'
++++ nvm_echo '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ command printf '%s\n' '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ nvm_grep -q '/Users/richardlaconte/.nvm/[^/]*/bin'
++++ GREP_OPTIONS=
++++ command grep -q '/Users/richardlaconte/.nvm/[^/]*/bin'
++++ grep -q '/Users/richardlaconte/.nvm/[^/]*/bin'
++++ nvm_echo '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ command printf '%s\n' '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ nvm_grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ GREP_OPTIONS=
++++ command grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ nvm_echo '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ command printf '%s\n' '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/[^/]*/bin'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/[^/]*/bin'
++++ grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/[^/]*/bin'
++++ nvm_echo '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ command printf '%s\n' '/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ grep -Eq '(^|:)(/usr(/local)?)?/bin:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/bin'
++++ nvm_echo '/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
++++ command printf '%s\n' '/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
+++ PATH='/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/usr/local/bin:/Users/richardlaconte/.grok/bin:/Users/richardlaconte/.local/bin:/Users/richardlaconte/.antigravity/antigravity/bin:/opt/homebrew/opt/postgresql@16/bin:/opt/homebrew/opt/postgresql@16/bin:/Users/richardlaconte/.bun/bin:/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/usr/local/go/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Postgres.app/Contents/Versions/latest/bin:/Users/richardlaconte/Desktop/flutter/bin:/Users/richardlaconte/.cargo/bin:/Users/richardlaconte/Library/Application Support/JetBrains/Toolbox/scripts:/Users/richardlaconte/.orbstack/bin:/Users/richardlaconte/go/bin'
+++ nvm_has manpath
+++ type manpath
+++ '[' -z '' ']'
+++ local MANPATH
++++ manpath
+++ MANPATH=/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ nvm_change_path /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man /share/man /Users/richardlaconte/.nvm/versions/node/v24.18.0
++++ '[' -z /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man ']'
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ nvm_grep -q '/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -q '/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ grep -q '/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ nvm_grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ grep -q '/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/[^/]*/share/man'
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ nvm_grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ GREP_OPTIONS=
++++ command grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ grep -Eq '(^|:)(/usr(/local)?)?/share/man:.*/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man'
++++ nvm_echo /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command printf '%s\n' /Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
++++ command sed -e 's#/Users/richardlaconte/.nvm/[^/]*/share/man[^:]*#/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man#' -e 's#/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man[^:]*#/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man#'
++++ sed -e 's#/Users/richardlaconte/.nvm/[^/]*/share/man[^:]*#/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man#' -e 's#/Users/richardlaconte/.nvm/versions/[^/]*/[^/]*/share/man[^:]*#/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man#'
+++ MANPATH=/Users/richardlaconte/.nvm/versions/node/v24.18.0/share/man:/opt/homebrew/share/man:/usr/local/share/man:/opt/homebrew/opt/postgresql@16/share/man:/System/Cryptexes/App/usr/share/man:/usr/share/man:/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:/Applications/Xcode.app/Contents/Developer/usr/share/man:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/man
+++ export MANPATH
+++ export PATH
+++ hash -r
+++ export NVM_BIN=/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin
+++ NVM_BIN=/Users/richardlaconte/.nvm/versions/node/v24.18.0/bin
+++ export NVM_INC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/include/node
+++ NVM_INC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/include/node
+++ '[' '' = true ']'
+++ local NVM_USE_OUTPUT
+++ NVM_USE_OUTPUT=
+++ '[' 1 -ne 1 ']'
+++ '[' _v24.18.0 '!=' _system ']'
+++ local NVM_USE_CMD
+++ NVM_USE_CMD='nvm use --delete-prefix'
+++ '[' -n v24.18.0 ']'
+++ NVM_USE_CMD='nvm use --delete-prefix v24.18.0'
+++ '[' 1 -eq 1 ']'
+++ NVM_USE_CMD='nvm use --delete-prefix v24.18.0 --silent'
+++ nvm_die_on_prefix 0 'nvm use --delete-prefix v24.18.0 --silent' /Users/richardlaconte/.nvm/versions/node/v24.18.0
+++ local NVM_DELETE_PREFIX
+++ NVM_DELETE_PREFIX=0
+++ case "${NVM_DELETE_PREFIX}" in
+++ local NVM_COMMAND
+++ NVM_COMMAND='nvm use --delete-prefix v24.18.0 --silent'
+++ local NVM_VERSION_DIR
+++ NVM_VERSION_DIR=/Users/richardlaconte/.nvm/versions/node/v24.18.0
+++ '[' -z 'nvm use --delete-prefix v24.18.0 --silent' ']'
+++ '[' -z /Users/richardlaconte/.nvm/versions/node/v24.18.0 ']'
+++ '[' -n '' ']'
+++ local NVM_OS
++++ nvm_get_os
++++ local NVM_UNAME
+++++ command uname -a
+++++ uname -a
++++ NVM_UNAME='Darwin Richards-MacBook-Pro-2.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:41 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T6000 arm64'
++++ local NVM_OS
++++ case "${NVM_UNAME}" in
++++ NVM_OS=darwin
++++ nvm_echo darwin
++++ command printf '%s\n' darwin
+++ NVM_OS=darwin
+++ local NVM_NPM_CONFIG_x_PREFIX_ENV
++++ command awk 'BEGIN { for (name in ENVIRON) if (toupper(name) == "NPM_CONFIG_PREFIX") { print name; break } }'
++++ awk 'BEGIN { for (name in ENVIRON) if (toupper(name) == "NPM_CONFIG_PREFIX") { print name; break } }'
+++ NVM_NPM_CONFIG_x_PREFIX_ENV=
+++ '[' -n '' ']'
+++ local NVM_NPM_BUILTIN_NPMRC
+++ NVM_NPM_BUILTIN_NPMRC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/lib/node_modules/npm/npmrc
+++ nvm_npmrc_bad_news_bears /Users/richardlaconte/.nvm/versions/node/v24.18.0/lib/node_modules/npm/npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/lib/node_modules/npm/npmrc
+++ '[' -n /Users/richardlaconte/.nvm/versions/node/v24.18.0/lib/node_modules/npm/npmrc ']'
+++ '[' -f /Users/richardlaconte/.nvm/versions/node/v24.18.0/lib/node_modules/npm/npmrc ']'
+++ return 1
+++ local NVM_NPM_GLOBAL_NPMRC
+++ NVM_NPM_GLOBAL_NPMRC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/etc/npmrc
+++ nvm_npmrc_bad_news_bears /Users/richardlaconte/.nvm/versions/node/v24.18.0/etc/npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/Users/richardlaconte/.nvm/versions/node/v24.18.0/etc/npmrc
+++ '[' -n /Users/richardlaconte/.nvm/versions/node/v24.18.0/etc/npmrc ']'
+++ '[' -f /Users/richardlaconte/.nvm/versions/node/v24.18.0/etc/npmrc ']'
+++ return 1
+++ local NVM_NPM_USER_NPMRC
+++ NVM_NPM_USER_NPMRC=/Users/richardlaconte/.npmrc
+++ nvm_npmrc_bad_news_bears /Users/richardlaconte/.npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/Users/richardlaconte/.npmrc
+++ '[' -n /Users/richardlaconte/.npmrc ']'
+++ '[' -f /Users/richardlaconte/.npmrc ']'
+++ nvm_grep -Ee '^(prefix|globalconfig) *='
+++ GREP_OPTIONS=
+++ command grep -Ee '^(prefix|globalconfig) *='
+++ grep -Ee '^(prefix|globalconfig) *='
+++ return 1
+++ local NVM_NPM_PROJECT_NPMRC
++++ nvm_find_project_dir
++++ local path_
++++ path_=/Users/richardlaconte/wkspaces/kestrel
++++ '[' /Users/richardlaconte/wkspaces/kestrel '!=' '' ']'
++++ '[' '!' -f /Users/richardlaconte/wkspaces/kestrel/package.json ']'
++++ nvm_echo /Users/richardlaconte/wkspaces/kestrel
++++ command printf '%s\n' /Users/richardlaconte/wkspaces/kestrel
+++ NVM_NPM_PROJECT_NPMRC=/Users/richardlaconte/wkspaces/kestrel/.npmrc
+++ nvm_npmrc_bad_news_bears /Users/richardlaconte/wkspaces/kestrel/.npmrc
+++ local NVM_NPMRC
+++ NVM_NPMRC=/Users/richardlaconte/wkspaces/kestrel/.npmrc
+++ '[' -n /Users/richardlaconte/wkspaces/kestrel/.npmrc ']'
+++ '[' -f /Users/richardlaconte/wkspaces/kestrel/.npmrc ']'
+++ return 1
+++ '[' -n '' ']'
++ echo '===== ENVIRONMENT ====='
+===== ENVIRONMENT =====
++ sw_vers
+ProductName:		macOS
+ProductVersion:		26.1
+BuildVersion:		25B78
++ uname -m
+arm64
++ git --version
+git version 2.51.0
++ cargo --version
+cargo 1.85.1 (d73d2caf9 2024-12-31)
++ node --version
+v24.18.0
++ gh --version
++ head -1
+gh version 2.96.0 (2026-07-02)
++ echo '===== GIT INIT + COMMIT ====='
+===== GIT INIT + COMMIT =====
++ '[' '!' -d .git ']'
++ git init -b main
+Initialized empty Git repository in /Users/richardlaconte/wkspaces/kestrel/.git/
++ git add .

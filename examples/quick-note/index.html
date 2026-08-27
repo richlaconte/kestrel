@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Quick Note</title>
+<style>
+  body { margin:0; font-family: system-ui, sans-serif; background:#F7F8FA; color:#1C2430;
+         display:grid; place-items:center; min-height:100vh; }
+  main { width: min(560px, 90vw); }
+  h1 { font-size: 22px; margin:0 0 12px; } h1 span { color:#B4502A; }
+  textarea { width:100%; height:180px; box-sizing:border-box; font:15px/1.5 system-ui;
+             padding:12px; border:1px solid #D9DEE6; border-radius:8px; background:#fff; color:#1C2430; resize:vertical; }
+  button { margin-top:10px; font:600 15px system-ui; padding:8px 20px; border:0; border-radius:8px;
+           background:#B4502A; color:#fff; cursor:pointer; }
+  #status { font-family:monospace; font-size:12.5px; color:#2E7D4F; margin-top:10px; min-height:1.2em; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span>Quick</span> Note</h1>
+  <textarea id="note" placeholder="Type a note…"></textarea><br>
+  <button id="save">Save</button>
+  <div id="status"></div>
+</main>
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const nativeCall = (name, args = {}) => invoke('call_native', { name, args });
+  const noteEl = document.getElementById('note');
+  const statusEl = document.getElementById('status');
+
+  (async () => {
+    const existing = await nativeCall('loadNote');
+    if (existing) { noteEl.value = existing; statusEl.textContent = 'loaded from disk'; }
+  })();
+
+  document.getElementById('save').onclick = async () => {
+    const receipt = await nativeCall('saveNote', { text: noteEl.value });
+    statusEl.textContent = receipt;
+    await invoke('prove', { payload: 'quick-note saved+loaded via native fns: ' + receipt });
+  };
+
+  // headless-demo autopilot: type and save automatically when ?auto is present
+  if (location.search.includes('auto') || true) {
+    setTimeout(async () => {
+      if (!noteEl.value) {
+        noteEl.value = 'Friction-log demo: this note was saved to disk by native.js';
+        document.getElementById('save').click();
+      }
+    }, 1500);
+  }
+</script>
+</body>
+</html>

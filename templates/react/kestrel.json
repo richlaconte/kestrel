@@ -1,0 +1,8 @@
+{
+  "appId": "my-app",
+  "title": "My App",
+  "width": 760,
+  "height": 560,
+  "frontend": { "dev": "vite", "dist": "dist" },
+  "native": "native.ts"
+}
