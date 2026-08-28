@@ -1,7 +1,7 @@
 {
   "name": "kestreljs",
   "version": "0.1.0",
-  "description": "The Kestrel CLI: create, dev, typegen, build.",
+  "description": "Kestrel — just React, actually native. The CLI: create, dev, typegen, build.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -12,5 +12,15 @@
   },
   "dependencies": {
     "typescript": "^5.5.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richlaconte/kestrel.git"
+  },
+  "homepage": "https://github.com/richlaconte/kestrel",
+  "files": [
+    "bin",
+    "src",
+    "templates"
+  ]
 }

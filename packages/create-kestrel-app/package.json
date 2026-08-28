@@ -12,5 +12,13 @@
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richlaconte/kestrel.git"
+  },
+  "homepage": "https://github.com/richlaconte/kestrel",
+  "files": [
+    "bin"
+  ]
 }

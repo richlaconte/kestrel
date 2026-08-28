@@ -76,9 +76,10 @@ achievable. Nobody ships both. That's the gap.
 ## Repo layout
 
 - `host/` — the generic Rust host (Tauri v2 + QuickJS). Built once per platform in CI.
-- `packages/kestrel/` — the CLI: `create`, `dev`, `typegen` (and soon `build`, `release`).
+- `packages/kestrel/` — the CLI (`kestreljs` on npm): `create`, `dev`, `typegen`, `build`
+  — plus the app templates it stamps out.
+- `packages/create-kestrel-app/` — the `npx create-kestrel-app` wrapper.
 - `packages/kestrel-native/` — the typed client runtime apps import.
-- `templates/default/` — what `kestrel create` stamps out.
 - `examples/quick-note/` — the canonical tiny app.
 - `docs/` — RFCs.
 
