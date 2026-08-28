@@ -63,6 +63,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: host
+          # v2: cache bust — a target dir cached from the MSVC attempt carried
+          # a stale rc.exe-format resource.lib into the GNU link.
+          prefix-key: kestrel-v2
 
       - name: Build host
         working-directory: host
