@@ -1,0 +1,16 @@
+{
+  "name": "create-kestrel-app",
+  "version": "0.1.0",
+  "description": "Scaffold a Kestrel app: npx create-kestrel-app my-app",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-kestrel-app": "bin/create.js"
+  },
+  "dependencies": {
+    "kestreljs": "0.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

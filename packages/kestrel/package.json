@@ -1,5 +1,5 @@
 {
-  "name": "kestrel",
+  "name": "kestreljs",
   "version": "0.1.0",
   "description": "The Kestrel CLI: create, dev, typegen, build.",
   "license": "MIT",

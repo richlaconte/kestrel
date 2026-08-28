@@ -1,4 +1,4 @@
-# Kestrel <sub><sup>(working codename)</sup></sub>
+# Kestrel
 
 **Just React. Actually native. Nothing else to learn.**
 
@@ -8,10 +8,13 @@ auto-updating, sub-10 MB binary. It is a developer-experience layer on
 [Tauri v2](https://v2.tauri.app): Tauri's runtime with better-than-Electron ergonomics.
 
 ```sh
-npx create-kestrel my-app
+npx create-kestrel-app my-app
 cd my-app
 npm run dev
 ```
+
+npm packages: `kestreljs` (the CLI — its binary is `kestrel`), `create-kestrel-app`
+(scaffolding), `kestrel-native` (the typed runtime).
 
 No Rust. No `tauri.conf.json`. No main/preload/renderer wiring. No 100 MB Chromium.
 
