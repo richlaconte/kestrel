@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runTypegen } from "../src/typegen.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PKG_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 const VITE_PORT = 5183;
 
@@ -50,8 +51,13 @@ function resolveHost() {
 function create(name) {
   if (!name) die("usage: kestrel create <app-name> [--template=react|vanilla]");
   const template = flag("template") ?? "react";
-  const tplDir = path.join(REPO_ROOT, "templates", template === "react" ? "react" : "default");
-  if (!fs.existsSync(tplDir)) die(`unknown template: ${template}`);
+  const dirName = template === "react" ? "react" : "default";
+  // Bundled with the npm package; the repo root works for monorepo development.
+  const tplDir = [
+    path.join(PKG_ROOT, "templates", dirName),
+    path.join(REPO_ROOT, "templates", dirName),
+  ].find((p) => fs.existsSync(p));
+  if (!tplDir) die(`unknown template: ${template}`);
   const dest = path.resolve(name);
   if (fs.existsSync(dest)) die(`${name} already exists`);
   fs.cpSync(tplDir, dest, { recursive: true });

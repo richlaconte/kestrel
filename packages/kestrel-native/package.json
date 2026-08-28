@@ -5,5 +5,14 @@
   "license": "MIT",
   "type": "module",
   "main": "index.js",
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richlaconte/kestrel.git"
+  },
+  "homepage": "https://github.com/richlaconte/kestrel",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ]
 }
