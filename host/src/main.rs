@@ -14,7 +14,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,34 +62,49 @@ type NativeCall = (
 
 struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<NativeCall>>>);
 
+// Engine: rquickjs (QuickJS with first-class MSVC support — the earlier
+// quick-js crate could not build on Windows, which blocked the CI matrix).
 fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCall> {
+    use rquickjs::{function::Func, Context, Function, Runtime};
+
     let (tx, rx) = std::sync::mpsc::channel::<NativeCall>();
     std::thread::spawn(move || {
-        let context = quick_js::Context::new().expect("quickjs init");
+        let rt = Runtime::new().expect("quickjs runtime");
+        let context = Context::full(&rt).expect("quickjs context");
 
-        // Host bindings: the privileged surface native functions may touch.
-        context
-            .add_callback("hostReadFile", |path: String| -> String {
-                std::fs::read_to_string(&path).unwrap_or_else(|e| format!("ERR: {e}"))
-            })
-            .expect("bind hostReadFile");
-        context
-            .add_callback("hostWriteFile", |path: String, contents: String| -> String {
-                match std::fs::write(&path, contents) {
-                    Ok(_) => "ok".to_string(),
-                    Err(e) => format!("ERR: {e}"),
-                }
-            })
-            .expect("bind hostWriteFile");
-        context
-            .add_callback("hostLog", |msg: String| -> bool {
-                eprintln!("[native] {msg}");
-                true
-            })
-            .expect("bind hostLog");
+        context.with(|ctx| {
+            let globals = ctx.globals();
+            // Host bindings: the privileged surface native functions may touch.
+            globals
+                .set(
+                    "hostReadFile",
+                    Func::from(|path: String| -> String {
+                        std::fs::read_to_string(&path).unwrap_or_else(|e| format!("ERR: {e}"))
+                    }),
+                )
+                .expect("bind hostReadFile");
+            globals
+                .set(
+                    "hostWriteFile",
+                    Func::from(|path: String, contents: String| -> String {
+                        match std::fs::write(&path, contents) {
+                            Ok(_) => "ok".to_string(),
+                            Err(e) => format!("ERR: {e}"),
+                        }
+                    }),
+                )
+                .expect("bind hostWriteFile");
+            globals
+                .set(
+                    "hostLog",
+                    Func::from(|msg: String| -> bool {
+                        eprintln!("[native] {msg}");
+                        true
+                    }),
+                )
+                .expect("bind hostLog");
 
-        context
-            .eval(
+            ctx.eval::<(), _>(
                 r#"
                 globalThis.native = {};
                 function __kestrel_dispatch(name, argsJson) {
@@ -102,23 +117,27 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
             )
             .expect("prelude");
 
-        let user_src = std::fs::read_to_string(&script_path).expect("read native module");
-        context.eval(&user_src).expect("eval native module");
+            let user_src = std::fs::read_to_string(&script_path).expect("read native module");
+            if let Err(e) = ctx.eval::<(), _>(user_src) {
+                let detail = format!("{:?}", ctx.catch());
+                panic!("eval native module: {e}: {detail}");
+            }
+        });
 
         while let Ok((name, args, reply)) = rx.recv() {
-            let res = context
-                .call_function(
-                    "__kestrel_dispatch",
-                    vec![
-                        quick_js::JsValue::String(name),
-                        quick_js::JsValue::String(args),
-                    ],
-                )
-                .map_err(|e| e.to_string())
-                .and_then(|v| match v {
-                    quick_js::JsValue::String(s) => Ok(s),
-                    other => Err(format!("unexpected dispatch return: {other:?}")),
-                });
+            let res = context.with(|ctx| -> Result<String, String> {
+                let dispatch: Function = ctx
+                    .globals()
+                    .get("__kestrel_dispatch")
+                    .map_err(|e| e.to_string())?;
+                dispatch.call::<_, String>((name, args)).map_err(|e| {
+                    // Surface the JS exception message when there is one.
+                    let exc = ctx.catch();
+                    exc.as_exception()
+                        .and_then(|x| x.message())
+                        .unwrap_or_else(|| e.to_string())
+                })
+            });
             let _ = reply.send(res);
         }
     });
