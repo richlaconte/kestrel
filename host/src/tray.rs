@@ -13,7 +13,7 @@ use serde_json::Value;
 use tauri::{
     menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Runtime, State,
+    AppHandle, Emitter, Runtime, State,
 };
 
 use crate::{error::KestrelError, window, Manifest};
@@ -366,7 +366,7 @@ fn remove<R: Runtime>(app: &AppHandle<R>) -> bool {
 /// Bring back the main window that closing hid (macOS dock click).
 #[cfg(target_os = "macos")]
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(w) = app.get_webview_window("main") {
+    if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
