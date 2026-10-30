@@ -15,4 +15,9 @@ assert.deepEqual(r.spin, { ok: true, value: "spun" });
 // #5: a 2 s native call must not freeze the page. A blocked main thread
 // paints ~0 frames; leave generous headroom for slow CI runners.
 assert.ok(r.spinFrames >= 20, `page painted only ${r.spinFrames} frames during a 2 s native call`);
+// #11: CSP header applied, popups denied, navigation away refused.
+assert.equal(r.evalBlocked, true, "default CSP must block eval");
+assert.equal(r.popup, "denied");
+assert.match(r.stillHere, /^(kestrel|http):$/, "window must stay on the app origin");
+console.log("OK: CSP blocks eval; popups and navigation away are refused");
 console.log(`OK: IPC contract holds (${r.spinFrames} frames painted during a 2 s native call)`);

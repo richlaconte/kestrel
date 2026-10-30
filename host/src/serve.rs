@@ -51,9 +51,26 @@ fn respond(status: u16, mime: &str, body: Vec<u8>) -> Resp {
         .unwrap()
 }
 
+/// Production Content-Security-Policy, unless the manifest sets `csp`.
+/// Scripts only from the app itself (wasm allowed); IPC endpoints differ per
+/// platform (`ipc:` on macOS/Linux, `http://ipc.localhost` on Windows).
+pub const DEFAULT_CSP: &str = "default-src 'self'; \
+    script-src 'self' 'wasm-unsafe-eval'; \
+    style-src 'self' 'unsafe-inline'; \
+    img-src 'self' data: blob:; \
+    font-src 'self' data:; \
+    media-src 'self' data: blob:; \
+    connect-src 'self' ipc: http://ipc.localhost; \
+    worker-src 'self' blob:; \
+    object-src 'none'; \
+    base-uri 'self'; \
+    form-action 'self'; \
+    frame-ancestors 'none'";
+
 /// Serve `uri_path` from `root` (canonical). Missing extensionless paths
-/// fall back to index.html, so client-side routes survive a reload.
-pub fn serve_static(root: &Path, uri_path: &str) -> Resp {
+/// fall back to index.html, so client-side routes survive a reload. HTML
+/// responses carry `csp` when one is given (empty means none).
+pub fn serve_static(root: &Path, uri_path: &str, csp: &str) -> Resp {
     let decoded = percent_decode_str(uri_path).decode_utf8_lossy();
     let rel = decoded.trim_start_matches('/');
     let rel = if rel.is_empty() || rel.ends_with('/') {
@@ -83,10 +100,16 @@ pub fn serve_static(root: &Path, uri_path: &str) -> Resp {
 
     match fs::read(&file) {
         Ok(body) => {
-            let mut r = respond(200, mime_for(&rel), body);
+            let mime = mime_for(&rel);
+            let mut r = respond(200, mime, body);
             if rel.ends_with("index.html") {
                 r.headers_mut()
                     .insert("Cache-Control", "no-cache".parse().unwrap());
+            }
+            if mime.starts_with("text/html") && !csp.is_empty() {
+                if let Ok(v) = csp.parse() {
+                    r.headers_mut().insert("Content-Security-Policy", v);
+                }
             }
             r
         }
@@ -199,36 +222,47 @@ mod tests {
     #[test]
     fn serves_files_with_types_and_decodes_paths() {
         let root = site();
-        let r = serve_static(&root, "/assets/app.wasm");
+        let r = serve_static(&root, "/assets/app.wasm", "");
         assert_eq!(r.status(), 200);
         assert_eq!(header(&r, "content-type"), "application/wasm");
-        let r = serve_static(&root, "/assets/my%20font.woff2");
+        let r = serve_static(&root, "/assets/my%20font.woff2", "");
         assert_eq!(r.status(), 200);
         assert_eq!(header(&r, "content-type"), "font/woff2");
     }
 
     #[test]
     fn index_is_not_cached() {
-        let r = serve_static(&site(), "/");
+        let r = serve_static(&site(), "/", "");
         assert_eq!(r.body(), b"<h1>app</h1>");
         assert_eq!(header(&r, "cache-control"), "no-cache");
     }
 
     #[test]
+    fn html_gets_the_csp_and_assets_do_not() {
+        let root = site();
+        let r = serve_static(&root, "/settings", DEFAULT_CSP);
+        assert!(header(&r, "content-security-policy").contains("script-src 'self'"));
+        let r = serve_static(&root, "/assets/app.wasm", DEFAULT_CSP);
+        assert_eq!(header(&r, "content-security-policy"), "");
+        let r = serve_static(&root, "/", "");
+        assert_eq!(header(&r, "content-security-policy"), "");
+    }
+
+    #[test]
     fn client_routes_fall_back_to_index_but_missing_assets_404() {
         let root = site();
-        let r = serve_static(&root, "/settings/profile");
+        let r = serve_static(&root, "/settings/profile", "");
         assert_eq!(r.status(), 200);
         assert_eq!(r.body(), b"<h1>app</h1>");
-        assert_eq!(serve_static(&root, "/assets/missing.js").status(), 404);
+        assert_eq!(serve_static(&root, "/assets/missing.js", "").status(), 404);
     }
 
     #[test]
     fn traversal_is_refused() {
         let root = site();
-        assert_eq!(serve_static(&root, "/../../etc/passwd").status(), 404);
+        assert_eq!(serve_static(&root, "/../../etc/passwd", "").status(), 404);
         assert_eq!(
-            serve_static(&root, "/%2e%2e/%2e%2e/etc/hosts").status(),
+            serve_static(&root, "/%2e%2e/%2e%2e/etc/hosts", "").status(),
             404
         );
     }
@@ -300,5 +334,50 @@ mod tests {
             .unwrap();
         let r = proxy("http://127.0.0.1:1/", &req);
         assert_eq!(r.status(), 502);
+    }
+}
+
+/// Is `url` the app's own origin? `kestrel://localhost` on macOS/Linux;
+/// WebView2 exposes custom schemes as `http(s)://kestrel.localhost`.
+pub fn is_app_url(url: &tauri::Url) -> bool {
+    match url.scheme() {
+        "kestrel" => true,
+        "http" | "https" => url.host_str() == Some("kestrel.localhost"),
+        _ => false,
+    }
+}
+
+/// Hand a web or mail link to the system's default handler.
+pub fn open_external(url: &tauri::Url) {
+    if !matches!(url.scheme(), "http" | "https" | "mailto") {
+        return;
+    }
+    let u = url.as_str();
+    #[cfg(target_os = "macos")]
+    let cmd = std::process::Command::new("open").arg(u).spawn();
+    #[cfg(target_os = "windows")]
+    let cmd = std::process::Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", u])
+        .spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let cmd = std::process::Command::new("xdg-open").arg(u).spawn();
+    if let Err(e) = cmd {
+        eprintln!("kestrel-host: cannot open {u}: {e}");
+    }
+}
+
+#[cfg(test)]
+mod nav_tests {
+    use super::is_app_url;
+
+    #[test]
+    fn app_origins() {
+        let ok = |s: &str| is_app_url(&s.parse().unwrap());
+        assert!(ok("kestrel://localhost/index.html"));
+        assert!(ok("http://kestrel.localhost/settings"));
+        assert!(!ok("http://localhost:5183/"));
+        assert!(!ok("https://example.com/"));
+        assert!(!ok("http://kestrel.localhost.evil.com/"));
+        assert!(!ok("file:///etc/passwd"));
     }
 }

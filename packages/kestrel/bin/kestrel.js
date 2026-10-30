@@ -283,6 +283,7 @@ async function build(dir = ".") {
     height: m.height,
     frontend: "app",
   };
+  if (m.csp !== undefined) runtime.csp = m.csp;
   if (compiled) {
     fs.copyFileSync(compiled, path.join(out, "native.js"));
     runtime.native = "native.js";

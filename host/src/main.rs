@@ -37,6 +37,10 @@ struct Manifest {
     /// while Vite's HMR websocket connects to the dev server directly.
     #[serde(default)]
     dev_url: Option<String>,
+    /// Content-Security-Policy for the built app's HTML. Absent: the
+    /// default policy. Empty string: none. Never applied in dev.
+    #[serde(default)]
+    csp: Option<String>,
     /// Headless-run safety net: exit after N ms so CI runs always terminate.
     #[serde(default)]
     exit_after_ms: Option<u64>,
@@ -331,6 +335,10 @@ fn main() {
     }
 
     let dev_base = manifest.dev_url.clone();
+    let csp = manifest
+        .csp
+        .clone()
+        .unwrap_or_else(|| serve::DEFAULT_CSP.to_string());
 
     let engine = NativeEngine(
         manifest
@@ -352,7 +360,11 @@ fn main() {
                     let base = base.clone();
                     std::thread::spawn(move || responder.respond(serve::proxy(&base, &request)));
                 }
-                None => responder.respond(serve::serve_static(&frontend_dir, request.uri().path())),
+                None => responder.respond(serve::serve_static(
+                    &frontend_dir,
+                    request.uri().path(),
+                    &csp,
+                )),
             }
         })
         .invoke_handler(tauri::generate_handler![get_manifest, call_native])
@@ -361,6 +373,21 @@ fn main() {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title(&window_cfg.title)
                 .inner_size(window_cfg.width, window_cfg.height)
+                // The window only ever shows the app. External links open
+                // in the system browser; anything else is refused.
+                .on_navigation(|url| {
+                    if serve::is_app_url(url) || url.scheme() == "about" {
+                        return true;
+                    }
+                    serve::open_external(url);
+                    false
+                })
+                .on_new_window(|url, _| {
+                    if !serve::is_app_url(&url) {
+                        serve::open_external(&url);
+                    }
+                    tauri::webview::NewWindowResponse::Deny
+                })
                 .build()?;
             if let Some(ms) = window_cfg.exit_after_ms {
                 let handle = app.handle().clone();

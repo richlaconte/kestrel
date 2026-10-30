@@ -1,6 +1,6 @@
 // kestrel.json validation. Mirrors schema/kestrel.schema.json (published for
 // editor autocomplete), with messages that name the field and the fix.
-const FIELDS = ["$schema", "appId", "title", "width", "height", "frontend", "native"];
+const FIELDS = ["$schema", "appId", "title", "width", "height", "frontend", "native", "csp"];
 
 /** Return a list of human-readable problems; empty means valid. */
 export function validateManifest(m) {
@@ -35,6 +35,9 @@ export function validateManifest(m) {
   }
   if (m.native !== undefined && (typeof m.native !== "string" || !/\.(ts|js)$/.test(m.native)))
     errs.push("`native` must be a path to a .ts or .js file");
+
+  if (m.csp !== undefined && typeof m.csp !== "string")
+    errs.push('`csp` must be a Content-Security-Policy string ("" turns it off)');
 
   for (const k of Object.keys(m))
     if (!FIELDS.includes(k)) errs.push(`\`${k}\` is not a known field`);
