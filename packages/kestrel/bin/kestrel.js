@@ -11,6 +11,7 @@ import { runTypegen, TypegenError } from "../src/typegen.js";
 import { WINDOW_FIELDS, validateManifest } from "../src/manifest.js";
 import { errorFile, watchNative } from "../src/watch.js";
 import { IconError, makeIcons } from "../src/icons.js";
+import * as linux from "../src/linux.js";
 import * as macos from "../src/macos.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -405,7 +406,22 @@ async function build(dir = ".") {
     }
     info(`built ${path.relative(process.cwd(), image)}`);
   }
-  if (!mac) console.log("  note: unsigned portable build. Installers for Windows and Linux are coming (#25, #26).");
+  if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
+  else if (!mac) console.log("  note: unsigned portable build. Installers for Windows are coming (#25).");
+}
+
+/** build/<name>_<version>_<arch>.deb from the portable folder. */
+function makeDeb(dir, m, out, version, icons) {
+  const arch = linux.debArchOf();
+  if (!arch) die(`--deb: no Debian architecture for ${process.arch}`);
+  let pkg = {};
+  try {
+    pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+  } catch {}
+  const { file, deb } = linux.debPackage({ m, dir: out, version, arch, icons: icons.png, pkg });
+  const dest = path.join(dir, "build", file);
+  fs.writeFileSync(dest, deb);
+  info(`built ${path.relative(process.cwd(), dest)} — ${(deb.length / 1024 / 1024).toFixed(1)} MB; installs to /opt/${linux.debNameOf(m)}`);
 }
 
 /** Sign (and maybe notarize) a built .app; returns how it ended up signed. */
@@ -443,7 +459,8 @@ switch (cmd) {
                           run the app (vite HMR when the template uses it;
                           the dev server takes the first free port from N, default 5183)
   kestrel typegen [dir]   regenerate typed native-function stubs
-  kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder elsewhere
+  kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder
+                          elsewhere (--deb on Linux for a Debian package)
 `);
     process.exit(cmd ? 1 : 0);
 }

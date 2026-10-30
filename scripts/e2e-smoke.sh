@@ -56,7 +56,7 @@ fi
 # Both templates: the vanilla one builds from "frontend": ".", which holds
 # build/ itself.
 echo "== build =="
-$KESTREL build . --dmg # --dmg: macOS only, ignored elsewhere
+$KESTREL build . --dmg --deb # --dmg: macOS only, --deb: Linux only
 for f in icon.icns icon.ico 16x16.png 256x256.png 1024x1024.png; do
   test -s "build/icons/$f" || { echo "FAIL: build/icons/$f missing" >&2; exit 1; }
 done
@@ -85,3 +85,21 @@ grep -q '"visits": *2' "$DATA/kestrel-data.json" || { echo "FAIL: bundle IPC nev
 test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -A "$FOREIGN")" >&2; exit 1; }
 echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
 rm_tree "$FOREIGN"
+
+# Linux (#26): the .deb installs, runs from /usr/bin and uninstalls. Needs
+# dpkg and password-less sudo, as on CI runners.
+if [ "$(uname)" = Linux ] && command -v dpkg >/dev/null && sudo -n true 2>/dev/null; then
+  echo "== install the .deb =="
+  DEB="$(ls build/*.deb)"
+  dpkg-deb --info "$DEB" | grep -q 'Package: smoke-app'
+  sudo dpkg -i "$DEB"
+  trap 'rc=$?; sudo dpkg -r smoke-app >/dev/null 2>&1 || true; rm_tree "$WORK"; exit $rc' EXIT
+  test -x /opt/smoke-app/smoke-app
+  grep -q '^Exec=/usr/bin/smoke-app$' /usr/share/applications/smoke-app.desktop
+  test -s /usr/share/icons/hicolor/256x256/apps/smoke-app.png
+  ( cd / && KESTREL_EXIT_AFTER_MS=12000 smoke-app )
+  grep -q '"visits": *3' "$DATA/kestrel-data.json" || { echo "FAIL: the installed app's IPC never ran" >&2; exit 1; }
+  sudo dpkg -r smoke-app
+  test ! -e /opt/smoke-app || { echo "FAIL: dpkg -r left /opt/smoke-app" >&2; exit 1; }
+  echo "OK: $(basename "$DEB") installs, runs from /usr/bin and uninstalls"
+fi
