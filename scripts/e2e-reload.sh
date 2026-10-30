@@ -37,12 +37,13 @@ wait_for() {
 }
 
 cd "$WORK"
-node "$REPO_ROOT/packages/kestrel/bin/kestrel.js" dev . --exit-after=40000 &
+node "$REPO_ROOT/packages/kestrel/bin/kestrel.js" dev . --exit-after=180000 &
 DEV_PID=$!
 
-wait_for '"before"' 20
+# WebKitGTK under xvfb takes ~30 s to show a first page in CI.
+wait_for '"before"' 90
 echo 'export const VALUE = "after";' > value.ts
-wait_for '"after"' 10
+wait_for '"after"' 30
 grep -q '"seen":\["before","after"\]' "$RESULT" ||
   { echo "FAIL: expected one page to see before → after, got $(cat "$RESULT")" >&2; exit 1; }
 echo "OK: $(cat "$RESULT") — reloaded without restarting the window"
