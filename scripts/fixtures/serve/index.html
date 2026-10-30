@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<p>serve fixture</p>
+<script type="module">
+  const call = (name, args = {}) => window.__TAURI__.core.invoke("call_native", { name, args });
+  const mode = import.meta.env.DEV ? "dev" : "build";
+
+  // Built app: reload onto a client-side route first; the host must answer
+  // it with index.html and still serve this hashed /assets/ script (#7).
+  if (mode === "build" && location.pathname !== "/deep/route") {
+    location.replace("/deep/route");
+  } else {
+    const r = { mode, path: location.pathname };
+    try {
+      const res = await fetch("/api/echo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hi: 1 }),
+      });
+      r.post = { status: res.status, echo: res.headers.get("x-echo"), body: await res.text() };
+    } catch (e) {
+      r.post = { error: String(e) };
+    }
+    try {
+      await WebAssembly.instantiateStreaming(fetch("/empty.wasm"));
+      r.wasm = "ok";
+    } catch (e) {
+      r.wasm = String(e);
+    }
+    r.fontType = (await fetch("/font.woff2")).headers.get("content-type");
+    await call("report", r);
+  }
+</script>

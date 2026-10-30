@@ -1668,6 +1668,7 @@ name = "kestrel-host"
 version = "0.1.0"
 dependencies = [
  "minreq",
+ "percent-encoding",
  "rquickjs",
  "serde",
  "serde_json",

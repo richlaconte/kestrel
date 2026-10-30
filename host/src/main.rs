@@ -7,6 +7,8 @@
 
 use std::{fs, path::PathBuf, sync::Mutex};
 
+mod serve;
+
 use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewUrl, WebviewWindowBuilder};
 
@@ -279,63 +281,15 @@ fn main() {
     tauri::Builder::default()
         .manage(manifest)
         .manage(engine)
-        .register_uri_scheme_protocol("kestrel", move |_ctx, request| {
-            // Dev mode: reverse-proxy everything to the frontend dev server.
-            if let Some(base) = &dev_base {
-                let pq = request
-                    .uri()
-                    .path_and_query()
-                    .map(|x| x.as_str())
-                    .unwrap_or("/");
-                let target = format!("{}{}", base.trim_end_matches('/'), pq);
-                return match minreq::get(&target).send() {
-                    Ok(resp) => {
-                        let mime = resp
-                            .headers
-                            .get("content-type")
-                            .cloned()
-                            .unwrap_or_else(|| "application/octet-stream".into());
-                        tauri::http::Response::builder()
-                            .status(resp.status_code as u16)
-                            .header("Content-Type", mime)
-                            .body(resp.into_bytes())
-                            .unwrap()
-                    }
-                    Err(e) => tauri::http::Response::builder()
-                        .status(502)
-                        .header("Content-Type", "text/plain")
-                        .body(format!("kestrel dev proxy: {e}").into_bytes())
-                        .unwrap(),
-                };
-            }
-            let rel = request.uri().path().trim_start_matches('/');
-            let rel = if rel.is_empty() { "index.html" } else { rel };
-            // Guard against path traversal out of the frontend dir.
-            let file = frontend_dir.join(rel);
-            let ok = file
-                .canonicalize()
-                .map(|f| f.starts_with(&frontend_dir))
-                .unwrap_or(false);
-            match (ok, fs::read(&file)) {
-                (true, Ok(body)) => {
-                    let mime = match rel.rsplit('.').next() {
-                        Some("html") => "text/html",
-                        Some("js") => "text/javascript",
-                        Some("css") => "text/css",
-                        Some("svg") => "image/svg+xml",
-                        Some("json") => "application/json",
-                        Some("png") => "image/png",
-                        _ => "application/octet-stream",
-                    };
-                    tauri::http::Response::builder()
-                        .header("Content-Type", mime)
-                        .body(body)
-                        .unwrap()
+        .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
+            match &dev_base {
+                // Dev: reverse-proxy to the frontend dev server, off the
+                // main thread so a slow transform never blocks the UI.
+                Some(base) => {
+                    let base = base.clone();
+                    std::thread::spawn(move || responder.respond(serve::proxy(&base, &request)));
                 }
-                _ => tauri::http::Response::builder()
-                    .status(404)
-                    .body(Vec::new())
-                    .unwrap(),
+                None => responder.respond(serve::serve_static(&frontend_dir, request.uri().path())),
             }
         })
         .invoke_handler(tauri::generate_handler![get_manifest, call_native])

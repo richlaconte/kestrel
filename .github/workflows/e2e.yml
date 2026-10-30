@@ -71,6 +71,9 @@ jobs:
       - name: E2E IPC contract (async, errors, non-blocking)
         run: eval "$RUN bash scripts/e2e-ipc.sh"
 
+      - name: E2E serving (dev proxy, MIME types, SPA fallback)
+        run: eval "$RUN bash scripts/e2e-serve.sh"
+
       - name: E2E smoke (react template)
         run: eval "$RUN bash scripts/e2e-smoke.sh react"
 
