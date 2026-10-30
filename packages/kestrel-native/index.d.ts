@@ -43,8 +43,9 @@ export declare const appWindow: {
 /**
  * Files, gated by kestrel.json `permissions`, with the same scope native code
  * gets. With "fs:app-data", relative paths resolve in the app's data
- * directory and paths outside it reject with `permission_denied`. Without an
- * fs grant every call rejects with `permission_denied`.
+ * directory and paths outside it reject with `permission_denied`; "fs:pick"
+ * adds whatever the user picks in `dialog`. Without an fs grant every call
+ * rejects with `permission_denied`.
  */
 export declare const fs: {
   readText(path: string): Promise<string>;
@@ -52,6 +53,48 @@ export declare const fs: {
   writeText(path: string, contents: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   appDataDir(): Promise<string>;
+};
+
+export interface FileDialogOptions {
+  title?: string;
+  /** A folder to start in, or a file path to suggest (save). */
+  defaultPath?: string;
+  filters?: { name: string; extensions: string[] }[];
+}
+
+export interface MessageOptions {
+  message: string;
+  title?: string;
+  kind?: "info" | "warning" | "error";
+  buttons?: "ok" | "okCancel" | "yesNo";
+}
+
+/**
+ * Native dialogs. Showing one needs no permission. With "fs:pick", the picked
+ * file or folder (and everything in it) becomes readable and writable
+ * through `fs` for the rest of the run. File dialogs resolve to null when the
+ * user cancels.
+ */
+export declare const dialog: {
+  pickFile(opts?: FileDialogOptions): Promise<string | null>;
+  pickFolder(opts?: FileDialogOptions): Promise<string | null>;
+  save(opts?: FileDialogOptions): Promise<string | null>;
+  /** True for OK/Yes; false for Cancel/No or a dismissed dialog. */
+  message(opts: MessageOptions | string): Promise<boolean>;
+};
+
+/** Show a system notification. Needs "notifications". */
+export declare function notify(title: string, body?: string): Promise<void>;
+
+/** Clipboard text. Needs "clipboard". */
+export declare const clipboard: {
+  readText(): Promise<string>;
+  writeText(text: string): Promise<void>;
+};
+
+/** Open an http, https or mailto link in the default app. Needs "shell:open". */
+export declare const shell: {
+  open(url: string): Promise<void>;
 };
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

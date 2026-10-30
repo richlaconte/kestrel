@@ -8,7 +8,7 @@
 function binding(name, permission) {
   const fn = globalThis[name];
   if (typeof fn === "function") return fn;
-  const e = new Error(`${permission} needs the "fs:app-data" or "fs:all" permission in kestrel.json`);
+  const e = new Error(`${permission} needs the "fs:app-data", "fs:pick" or "fs:all" permission in kestrel.json`);
   e.code = "permission_denied";
   throw e;
 }

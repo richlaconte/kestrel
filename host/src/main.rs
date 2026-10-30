@@ -473,7 +473,12 @@ fn main() {
     // Everything per-app derives from appId, never the shared host
     // identifier: native file access and the webview's own storage.
     let data_dir = scope::app_data_dir(&manifest.app_id).unwrap_or_else(|e| fail(e));
-    let fs = fs_scope.map(|s| scope::Fs::new(s, &data_dir).unwrap_or_else(|e| fail(e)));
+    let picks = manifest.permissions.iter().any(|p| p == "fs:pick");
+    let fs = fs_scope.map(|s| {
+        scope::Fs::new(s, &data_dir)
+            .unwrap_or_else(|e| fail(e))
+            .with_pick(picks)
+    });
     let webview_dir = scope::webview_data_dir(&data_dir);
     let store_id = scope::webview_store_id(&manifest.app_id);
 
@@ -506,6 +511,11 @@ fn main() {
     let window_cfg = manifest.clone();
 
     tauri::Builder::default()
+        // Rust-side only: the capability grants none of their JS commands,
+        // so the webview reaches them through stdlib's gated commands.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(manifest)
         .manage(engine)
         .manage(stdlib::WebFs(fs))
@@ -543,6 +553,14 @@ fn main() {
             stdlib::store_set,
             stdlib::store_delete,
             stdlib::store_keys,
+            stdlib::dialog_pick_file,
+            stdlib::dialog_pick_folder,
+            stdlib::dialog_save,
+            stdlib::dialog_message,
+            stdlib::notify,
+            stdlib::clipboard_read_text,
+            stdlib::clipboard_write_text,
+            stdlib::shell_open,
         ])
         .setup(move |app| {
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
@@ -561,12 +579,16 @@ fn main() {
                     if serve::is_app_url(url) || url.scheme() == "about" {
                         return true;
                     }
-                    serve::open_external(url);
+                    if let Err(e) = serve::open_external(url) {
+                        eprintln!("kestrel-host: {e}");
+                    }
                     false
                 })
                 .on_new_window(|url, _| {
                     if !serve::is_app_url(&url) {
-                        serve::open_external(&url);
+                        if let Err(e) = serve::open_external(&url) {
+                            eprintln!("kestrel-host: {e}");
+                        }
                     }
                     tauri::webview::NewWindowResponse::Deny
                 })

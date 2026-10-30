@@ -3,7 +3,7 @@
 const FIELDS = ["$schema", "appId", "title", "version", "width", "height", "frontend", "native", "csp", "permissions"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
-export const PERMISSIONS = ["fs:app-data", "fs:all"];
+export const PERMISSIONS = ["fs:app-data", "fs:pick", "fs:all", "notifications", "clipboard", "shell:open"];
 
 /** Return a list of human-readable problems; empty means valid. */
 export function validateManifest(m) {

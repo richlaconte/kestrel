@@ -238,7 +238,7 @@ test("kestreljs/native/host maps onto the host's bindings (#20)", async () => {
   // No fs grant: the bindings are absent and calls reject with a code.
   const e = await load(res, { hostLog() {} }).roundTrip().catch((x) => x);
   assert.equal(e.code, "permission_denied");
-  assert.match(e.message, /fs\.writeText needs the "fs:app-data" or "fs:all" permission/);
+  assert.match(e.message, /fs\.writeText needs the "fs:app-data", "fs:pick" or "fs:all" permission/);
 });
 
 test("importing a Node built-in fails with a pointed message (#20)", () => {

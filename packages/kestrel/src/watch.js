@@ -50,8 +50,9 @@ export function watchNative(dir, manifest, initialInputs, { onBuild, onError, de
       sync();
       onBuild(res);
     } catch (e) {
-      if (!(e instanceof TypegenError)) throw e;
-      onError(e.message);
+      // Anything else (an esbuild crash, a file vanishing mid-read) is
+      // reported too: it runs in a timer, where a throw would end `dev`.
+      onError(e instanceof TypegenError ? e.message : `native rebuild failed: ${e.stack ?? e}`);
     }
   };
 

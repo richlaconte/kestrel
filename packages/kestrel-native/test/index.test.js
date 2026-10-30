@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { app, appWindow as win, fs, KestrelError, store } from "../index.js";
+import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store } from "../index.js";
 
 /** Route invoke() to `impl`, recording each command and its args. */
 function fakeHost(impl) {
@@ -72,4 +72,29 @@ test("outside a Kestrel window every call rejects with unsupported_platform", as
   delete globalThis.window;
   const e = await store.keys().catch((x) => x);
   assert.equal(e.code, "unsupported_platform");
+});
+
+test("dialog, notify, clipboard and shell map onto their host commands", async () => {
+  const calls = fakeHost(() => null);
+  const filters = [{ name: "Text", extensions: ["txt"] }];
+  assert.equal(await dialog.pickFile({ filters }), null, "cancelled");
+  await dialog.pickFolder();
+  await dialog.save({ defaultPath: "notes.txt" });
+  await dialog.message("Saved");
+  await dialog.message({ message: "Delete?", buttons: "yesNo", kind: "warning" });
+  await notify("Done", "3 files");
+  await clipboard.writeText("hi");
+  await clipboard.readText();
+  await shell.open("https://example.com");
+  assert.deepEqual(calls, [
+    ["dialog_pick_file", { opts: { filters } }],
+    ["dialog_pick_folder", { opts: undefined }],
+    ["dialog_save", { opts: { defaultPath: "notes.txt" } }],
+    ["dialog_message", { opts: { message: "Saved" } }],
+    ["dialog_message", { opts: { message: "Delete?", buttons: "yesNo", kind: "warning" } }],
+    ["notify", { title: "Done", body: "3 files" }],
+    ["clipboard_write_text", { text: "hi" }],
+    ["clipboard_read_text", undefined],
+    ["shell_open", { url: "https://example.com" }],
+  ]);
 });

@@ -74,7 +74,7 @@
       "type": "string"
     },
     "permissions": {
-      "description": "Capabilities granted to native code. Omit or leave empty for none: native functions then get no filesystem access at all.",
+      "description": "Capabilities the app's webview std-lib and native code may use. Omit or leave empty for none: no files, clipboard, notifications or links.",
       "type": "array",
       "uniqueItems": true,
       "items": {
@@ -84,8 +84,24 @@
             "description": "Read and write files inside the app's data directory. Relative paths resolve there."
           },
           {
+            "const": "fs:pick",
+            "description": "Read and write files and folders the user picks in a dialog (dialog.pickFile, pickFolder, save)."
+          },
+          {
             "const": "fs:all",
-            "description": "Read and write any file the user can. Relative paths still resolve in the app's data directory. Prefer fs:app-data."
+            "description": "Read and write any file the user can. Relative paths still resolve in the app's data directory. Prefer fs:app-data or fs:pick."
+          },
+          {
+            "const": "notifications",
+            "description": "Show system notifications (notify)."
+          },
+          {
+            "const": "clipboard",
+            "description": "Read and write the clipboard's text (clipboard.readText, writeText)."
+          },
+          {
+            "const": "shell:open",
+            "description": "Open http, https and mailto links in the default app (shell.open)."
           }
         ]
       }

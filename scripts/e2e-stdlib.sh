@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# E2E webview std-lib (#17, #18): app, window, fs and store called straight
+# E2E webview std-lib (#17, #18): app, window, fs, store, clipboard, and the
+# permission gates on dialog, notify and shell, called straight
 # from the webview through kestrel-native, with no native.ts. Runs the app
 # twice (the store must survive a restart), checks app.quit() ends the host
 # well before its safety timer (150 s), then runs it again without an fs grant.
@@ -11,14 +12,17 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${KESTREL_HOST:-$REPO_ROOT/host/target/release/kestrel-host}"
 [ -x "$HOST" ] || HOST="$HOST.exe"
 WORK="$(mktemp -d)"
-trap 'rc=$?; cd /; rm_tree "$WORK"; exit $rc' EXIT
+# The fixture writes the clipboard; put a developer's clipboard back after.
+SAVED_CLIP=""
+[ "$(uname)" = Darwin ] && SAVED_CLIP="$(pbpaste 2>/dev/null || true)"
+trap 'rc=$?; [ "$(uname)" = Darwin ] && printf %s "$SAVED_CLIP" | pbcopy; cd /; rm_tree "$WORK"; exit $rc' EXIT
 cp -R "$REPO_ROOT/scripts/fixtures/stdlib/." "$WORK"
 cp "$REPO_ROOT/packages/kestrel-native/index.js" "$WORK/kestrel-native.js"
 cd "$WORK"
 native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 run() { # run <granted|ungranted> <run number>
-  local perms='["fs:app-data"]'
+  local perms='["fs:app-data","clipboard","shell:open"]'
   [ "$1" = ungranted ] && perms='[]'
   printf '{"appId":"kestrel-e2e-stdlib-%s","title":"Std-lib","version":"1.2.3","frontend":".","permissions":%s}\n' \
     "$1" "$perms" > "$1.kestrel.json"

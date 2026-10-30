@@ -43,7 +43,11 @@ test("permissions: known names only, no duplicates", () => {
   assert.equal(errs([]), "");
   assert.equal(errs(["fs:app-data"]), "");
   assert.match(errs("fs:all"), /`permissions` must be an array/);
-  assert.match(errs(["fs:root"]), /unknown "fs:root" \(available: fs:app-data, fs:all\)/);
+  assert.equal(errs(["fs:pick", "clipboard", "notifications", "shell:open"]), "");
+  assert.match(
+    errs(["fs:root"]),
+    /unknown "fs:root" \(available: fs:app-data, fs:pick, fs:all, notifications, clipboard, shell:open\)/,
+  );
   assert.match(errs(["fs:all", "fs:all"]), /lists "fs:all" twice/);
 });
 

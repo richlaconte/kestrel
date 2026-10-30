@@ -4,7 +4,8 @@
 /**
  * Files, gated by kestrel.json `permissions`. With "fs:app-data", relative
  * paths resolve in this app's data directory and paths outside it reject
- * with `permission_denied`. Without an fs grant every call rejects with
+ * with `permission_denied`; "fs:pick" adds what the user picked in a webview
+ * dialog. Without an fs grant every call rejects with
  * `permission_denied`. A missing file rejects with `not_found`.
  */
 export declare const fs: {
