@@ -38,6 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: NSIS (for kestrel build --installer)
+        if: runner.os == 'Windows'
+        run: |
+          if ! command -v makensis >/dev/null && [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then
+            choco install nsis -y --no-progress
+          fi
+
       - name: System deps (webkit2gtk, xvfb, squashfs-tools)
         if: runner.os == 'Linux'
         run: |

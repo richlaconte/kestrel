@@ -13,6 +13,7 @@ import { errorFile, watchNative } from "../src/watch.js";
 import { IconError, makeIcons } from "../src/icons.js";
 import * as linux from "../src/linux.js";
 import * as macos from "../src/macos.js";
+import * as win from "../src/windows.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -369,6 +370,9 @@ async function build(dir = ".") {
     fs.cpSync(src, path.join(layout.resources, "app", e), { recursive: true, filter: (p) => !hidden(p) });
   }
   fs.writeFileSync(path.join(layout.resources, "icon.png"), icons.png[256]);
+  // Shortcuts and Apps & features point at this; the exe still carries
+  // the host's own icon resource (#25).
+  if (process.platform === "win32") fs.writeFileSync(path.join(layout.resources, "icon.ico"), icons.ico);
   const runtime = {
     appId: m.appId,
     title: m.title,
@@ -409,7 +413,15 @@ async function build(dir = ".") {
   const linuxOut = process.platform === "linux" && ["--deb", "--appimage"].some((f) => args.includes(f));
   if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
   if (process.platform === "linux" && args.includes("--appimage")) await makeAppImage(dir, m, out, version, icons);
-  if (process.platform === "win32") console.log("  note: unsigned portable build. A Windows installer is coming (#25).");
+  if (process.platform === "win32") {
+    const plan = win.signingPlan();
+    if (plan.orphanPassword) warn("KESTREL_WIN_SIGN_PASSWORD is set but KESTREL_WIN_SIGN_PFX isn't; not signing");
+    const signtool = plan.pfx ? win.findSigntool() : null;
+    if (plan.pfx && !signtool) die("KESTREL_WIN_SIGN_PFX is set but signtool wasn't found: install the Windows SDK");
+    if (signtool) winSign(signtool, plan, layout.exe);
+    if (args.includes("--installer")) makeWinInstaller(dir, m, out, version, signtool, plan);
+    else console.log(`  note: ${signtool ? "signed" : "unsigned"} portable build. Add --installer for a setup.exe.`);
+  }
   else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
 }
 
@@ -450,6 +462,36 @@ async function makeAppImage(dir, m, out, version, icons) {
   info(`built ${path.relative(process.cwd(), dest)} — ${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB`);
 }
 
+function winSign(signtool, plan, file) {
+  try {
+    win.sign(signtool, plan, file);
+  } catch (e) {
+    die(`signing ${path.basename(file)} failed: ${e.stderr?.toString().trim() || e.stdout?.toString().trim() || e.message}`);
+  }
+}
+
+/** build/<Title>-<version>-<arch>-setup.exe from the portable folder. */
+function makeWinInstaller(dir, m, out, version, signtool, plan) {
+  const makensis = win.findMakensis();
+  if (!makensis) die("--installer needs NSIS: install it from https://nsis.sourceforge.io (or `winget install NSIS.NSIS`)");
+  const dest = path.join(dir, "build", win.installerNameOf(m, version));
+  let signCmd;
+  try {
+    signCmd = signtool ? win.signCommand(signtool, plan) : undefined;
+  } catch (e) {
+    die(e.message);
+  }
+  const script = win.nsisScript({ m, version, pkg: readPackageJson(dir), src: out, icon: path.join(out, "icon.ico"), out: dest, signCmd });
+  try {
+    win.makeInstaller({ makensis, script, out: dest });
+  } catch (e) {
+    die(`makensis failed:\n${e.stdout?.toString().trim() || ""}\n${e.stderr?.toString().trim() || e.message}`);
+  }
+  if (signtool) winSign(signtool, plan, dest);
+  const mb = (fs.statSync(dest).size / 1024 / 1024).toFixed(1);
+  info(`built ${path.relative(process.cwd(), dest)} — ${mb} MB, ${signtool ? "signed" : "unsigned"}; installs per user, no admin`);
+}
+
 /** Sign (and maybe notarize) a built .app; returns how it ended up signed. */
 function signMac(app) {
   const plan = macos.signingPlan();
@@ -487,7 +529,7 @@ switch (cmd) {
   kestrel typegen [dir]   regenerate typed native-function stubs
   kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder
                           elsewhere (on Linux, --deb for a Debian package and
-                          --appimage for an AppImage)
+                          --appimage for an AppImage; on Windows, --installer)
 `);
     process.exit(cmd ? 1 : 0);
 }
