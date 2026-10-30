@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 import { runTypegen, TypegenError } from "../src/typegen.js";
 import { WINDOW_FIELDS, validateManifest } from "../src/manifest.js";
 import { errorFile, watchNative } from "../src/watch.js";
+import { IconError, makeIcons } from "../src/icons.js";
+import * as macos from "../src/macos.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -25,6 +27,16 @@ const die = (msg) => {
   process.exit(1);
 };
 const info = (msg) => console.log(`\x1b[36mkestrel\x1b[0m ${msg}`);
+const warn = (msg) => console.warn(`\x1b[33mkestrel: warning:\x1b[0m ${msg}`);
+const DEFAULT_ICON = path.join(PKG_ROOT, "assets", "icon.png");
+
+/** The app's icon source: its own, else Kestrel's. */
+function iconOf(dir, m) {
+  if (m.icon === undefined) return DEFAULT_ICON;
+  const p = path.resolve(dir, m.icon);
+  if (!fs.existsSync(p)) die(`icon ${m.icon} not found (from kestrel.json \`icon\`)`);
+  return p;
+}
 
 function readManifest(dir) {
   const p = path.join(dir, "kestrel.json");
@@ -206,6 +218,7 @@ async function dev(dir = ".") {
     width: m.width,
     height: m.height,
     ...windowFields(m),
+    icon: iconOf(dir, m),
     frontend: dir, // used only in static mode; host requires it either way
     permissions: m.permissions ?? [],
   };
@@ -313,38 +326,108 @@ async function build(dir = ".") {
   if (!fs.existsSync(path.join(assets, "index.html")))
     die(`no index.html in ${assets} — frontend build failed?`);
 
-  // 2. Assemble the bundle
-  const out = path.join(dir, "build", m.appId);
+  // 2. Icons: every size, for the bundle and for installers.
+  const iconSrc = iconOf(dir, m);
+  let icons;
+  try {
+    icons = makeIcons(fs.readFileSync(iconSrc));
+  } catch (e) {
+    if (!(e instanceof IconError)) throw e;
+    die(`icon ${path.relative(dir, iconSrc)}: ${e.message}`);
+  }
+  icons.warnings.forEach((w) => warn(w));
+  const iconsDir = path.join(dir, "build", "icons");
+  fs.rmSync(iconsDir, { recursive: true, force: true });
+  fs.mkdirSync(iconsDir, { recursive: true });
+  fs.writeFileSync(path.join(iconsDir, "icon.icns"), icons.icns);
+  fs.writeFileSync(path.join(iconsDir, "icon.ico"), icons.ico);
+  for (const [s, png] of Object.entries(icons.png)) fs.writeFileSync(path.join(iconsDir, `${s}x${s}.png`), png);
+
+  // 3. Assemble: a .app on macOS, a portable folder elsewhere.
+  const mac = process.platform === "darwin";
+  const version = appVersion(dir, m);
+  const out = mac
+    ? path.join(dir, "build", `${macos.appNameOf(m)}.app`)
+    : path.join(dir, "build", m.appId);
+  const layout = mac
+    ? macos.appLayout(out, m)
+    : { exe: path.join(out, m.appId + (process.platform === "win32" ? ".exe" : "")), resources: out };
   fs.rmSync(out, { recursive: true, force: true });
-  fs.mkdirSync(out, { recursive: true });
+  fs.mkdirSync(path.dirname(layout.exe), { recursive: true });
+  fs.mkdirSync(layout.resources, { recursive: true });
 
-  const exe = path.join(out, m.appId + (process.platform === "win32" ? ".exe" : ""));
-  fs.copyFileSync(host, exe);
-  fs.chmodSync(exe, 0o755);
-
-  fs.cpSync(assets, path.join(out, "app"), { recursive: true });
+  fs.copyFileSync(host, layout.exe);
+  fs.chmodSync(layout.exe, 0o755);
+  // A frontend of "." holds the build output, dependencies and dotfiles
+  // too. Entry by entry: cpSync refuses to copy a folder into itself.
+  const skip = new Set([path.join(dir, "build"), path.join(dir, "node_modules")]);
+  const hidden = (p) => path.basename(p).startsWith(".");
+  for (const e of fs.readdirSync(assets)) {
+    const src = path.join(assets, e);
+    if (skip.has(src) || hidden(src)) continue;
+    fs.cpSync(src, path.join(layout.resources, "app", e), { recursive: true, filter: (p) => !hidden(p) });
+  }
+  fs.writeFileSync(path.join(layout.resources, "icon.png"), icons.png[256]);
   const runtime = {
     appId: m.appId,
     title: m.title,
-    version: appVersion(dir, m),
+    version,
     width: m.width,
     height: m.height,
     ...windowFields(m),
+    icon: "icon.png",
     frontend: "app",
     permissions: m.permissions ?? [],
   };
   if (m.csp !== undefined) runtime.csp = m.csp;
   if (compiled) {
-    fs.copyFileSync(compiled, path.join(out, "native.js"));
+    fs.copyFileSync(compiled, path.join(layout.resources, "native.js"));
     runtime.native = "native.js";
   }
-  fs.writeFileSync(path.join(out, "kestrel.json"), JSON.stringify(runtime, null, 2) + "\n");
+  fs.writeFileSync(path.join(layout.resources, "kestrel.json"), JSON.stringify(runtime, null, 2) + "\n");
 
+  let signed = "unsigned";
+  if (mac) {
+    fs.writeFileSync(layout.plist, macos.infoPlist(m, version));
+    fs.writeFileSync(path.join(layout.resources, "icon.icns"), icons.icns);
+    signed = signMac(out);
+  }
+
+  const rel = path.relative(process.cwd(), out);
   const mb = (dirSize(out) / 1024 / 1024).toFixed(1);
-  info(`built ${path.relative(process.cwd(), out)}/ — ${mb} MB total, runs from anywhere`);
-  console.log(
-    "  note: unsigned portable build. Signed installers + auto-update are Phase 2.",
-  );
+  info(`built ${rel}${mac ? "" : "/"} — ${mb} MB, ${signed}; icons in ${path.relative(process.cwd(), iconsDir)}/`);
+  if (mac && args.includes("--dmg")) {
+    const image = path.join(dir, "build", `${macos.appNameOf(m)}-${version}.dmg`);
+    try {
+      macos.dmg(out, image, m.title);
+    } catch (e) {
+      die(`could not make the .dmg: ${e.stderr?.toString().trim() || e.message}`);
+    }
+    info(`built ${path.relative(process.cwd(), image)}`);
+  }
+  if (!mac) console.log("  note: unsigned portable build. Installers for Windows and Linux are coming (#25, #26).");
+}
+
+/** Sign (and maybe notarize) a built .app; returns how it ended up signed. */
+function signMac(app) {
+  const plan = macos.signingPlan();
+  if (plan.partial.length)
+    warn(`notarization needs APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID; missing ${plan.partial.join(", ")}`);
+  const failed = (what, e) => die(`${what} failed: ${e.stderr?.toString().trim() || e.message}`);
+  try {
+    macos.sign(app, plan.identity);
+  } catch (e) {
+    failed(plan.identity ? `codesign with "${plan.identity}"` : "ad hoc codesign", e);
+  }
+  if (!plan.identity) return "signed ad hoc (runs on this Mac; set KESTREL_SIGN_IDENTITY to ship it)";
+  if (!plan.notarize) return `signed by ${plan.identity}, not notarized`;
+  info("notarizing (Apple usually takes a few minutes)…");
+  try {
+    macos.notarize(app);
+  } catch (e) {
+    failed("notarization", e);
+  }
+  return `signed by ${plan.identity}, notarized and stapled`;
 }
 
 switch (cmd) {
@@ -360,7 +443,7 @@ switch (cmd) {
                           run the app (vite HMR when the template uses it;
                           the dev server takes the first free port from N, default 5183)
   kestrel typegen [dir]   regenerate typed native-function stubs
-  kestrel build [dir]     portable app bundle (unsigned; installers land in Phase 2)
+  kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder elsewhere
 `);
     process.exit(cmd ? 1 : 0);
 }

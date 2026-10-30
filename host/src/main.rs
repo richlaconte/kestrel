@@ -41,6 +41,9 @@ struct Manifest {
     window: window::WindowOptions,
     /// Directory containing the app's built frontend (index.html at its root).
     frontend: String,
+    /// The window icon, a PNG. The CLI passes the app's icon, or Kestrel's.
+    #[serde(default)]
+    icon: Option<String>,
     /// Optional "native functions" module: privileged JS run in an embedded
     /// QuickJS engine inside the host (the spike's server-actions analogue).
     #[serde(default)]
@@ -471,6 +474,12 @@ fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
             frontend_dir.display()
         ));
     }
+    if let Some(i) = &manifest.icon {
+        let p = manifest_dir.join(i).canonicalize().map_err(|e| {
+            format!("icon `{i}` (from {shown}) not found: {e}. Check the `icon` field.")
+        })?;
+        manifest.icon = Some(p.to_string_lossy().into_owned());
+    }
     if let Some(n) = &manifest.native {
         let p = manifest_dir.join(n).canonicalize().map_err(|e| {
             format!("native module `{n}` (from {shown}) not found: {e}. Check the `native` field.")
@@ -484,14 +493,31 @@ fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
     })
 }
 
+/// Where a built app keeps its manifest: `Contents/Resources` when the
+/// executable is in a macOS `.app` (codesign wants only code in
+/// `Contents/MacOS`), else right beside the executable.
+fn bundled_manifest(exe_dir: &Path) -> PathBuf {
+    if let Some(contents) = exe_dir
+        .parent()
+        .filter(|_| exe_dir.ends_with("Contents/MacOS"))
+    {
+        let res = contents.join("Resources/kestrel.json");
+        if res.is_file() {
+            return res;
+        }
+    }
+    exe_dir.join("kestrel.json")
+}
+
 fn main() {
-    // Manifest location: argv[1], else kestrel.json BESIDE THE EXECUTABLE —
-    // a built bundle must work when double-clicked from any cwd.
+    // Manifest location: argv[1], else next to the executable (or in a
+    // macOS .app's Resources): a built app must work when double-clicked
+    // from any cwd.
     let manifest_path: PathBuf = match std::env::args().nth(1) {
         Some(p) => PathBuf::from(p),
         None => std::env::current_exe()
             .ok()
-            .and_then(|exe| exe.parent().map(|d| d.join("kestrel.json")))
+            .and_then(|exe| exe.parent().map(bundled_manifest))
             .unwrap_or_else(|| PathBuf::from("kestrel.json")),
     };
     let fail = |e: String| -> ! {
@@ -517,9 +543,16 @@ fn main() {
         .remember_window
         .then(|| window::WindowState::open(&data_dir));
     let saver = window_state.clone();
-    let storage = window::Storage {
+    let shared = window::Shared {
         dir: scope::webview_data_dir(&data_dir),
         store_id: scope::webview_store_id(&manifest.app_id),
+        icon: manifest.icon.as_ref().map(|p| {
+            tauri::image::Image::from_path(p).unwrap_or_else(|e| {
+                fail(format!(
+                    "cannot load icon {p}: {e}. Check the `icon` field; it must be a PNG."
+                ))
+            })
+        }),
     };
 
     // Test hook for headless CI runs of built bundles.
@@ -571,7 +604,7 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(manifest)
         .manage(engine)
-        .manage(storage.clone())
+        .manage(shared.clone())
         .manage(stdlib::WebFs(fs))
         .manage(store::Store::open(&data_dir))
         .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
@@ -645,7 +678,7 @@ fn main() {
                 .map(|s| s.rect)
                 .filter(|r| window::reachable(*r, &displays));
             let mut builder = opts
-                .apply(window::app_window(app, "main", url, &storage))
+                .apply(window::app_window(app, "main", url, &shared)?)
                 .title(&window_cfg.title)
                 .inner_size(w, h);
             builder = match place {
@@ -1037,6 +1070,29 @@ mod tests {
         ]);
         let p = prepare(&ok.join("kestrel.json")).unwrap();
         assert_eq!(p.fs_scope, Some(scope::FsScope::AppData));
+    }
+
+    #[test]
+    fn built_apps_find_their_manifest() {
+        let dir = app(&[
+            ("Plain/kestrel.json", "{}"),
+            ("My App.app/Contents/Resources/kestrel.json", "{}"),
+            ("Old.app/Contents/MacOS/kestrel.json", "{}"),
+        ]);
+        assert_eq!(
+            bundled_manifest(&dir.join("Plain")),
+            dir.join("Plain/kestrel.json")
+        );
+        let app_dir = dir.join("My App.app/Contents/MacOS");
+        assert_eq!(
+            bundled_manifest(&app_dir),
+            dir.join("My App.app/Contents/Resources/kestrel.json")
+        );
+        // A .app without Resources/kestrel.json falls back to beside the exe.
+        assert_eq!(
+            bundled_manifest(&dir.join("Old.app/Contents/MacOS")),
+            dir.join("Old.app/Contents/MacOS/kestrel.json")
+        );
     }
 
     #[test]

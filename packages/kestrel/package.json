@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/richlaconte/kestrel",
   "files": [
+    "assets",
     "bin",
     "native",
     "schema",

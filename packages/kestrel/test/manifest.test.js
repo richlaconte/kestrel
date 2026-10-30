@@ -85,3 +85,11 @@ test("CLI and host agree on the window fields", () => {
   const camel = (s) => s.replace(/_(\w)/g, (_, c) => c.toUpperCase());
   assert.deepEqual([...struct.matchAll(/pub (\w+):/g)].map((x) => camel(x[1])), WINDOW_FIELDS);
 });
+
+test("icon and bundleId (#24, #27)", () => {
+  const errs = (o) => validateManifest({ ...ok, ...o }).join("\n");
+  assert.equal(errs({ icon: "assets/icon.png", bundleId: "com.example.my-app" }), "");
+  assert.match(errs({ icon: "icon.svg" }), /`icon` must be a path to a square PNG/);
+  assert.match(errs({ bundleId: "my-app" }), /`bundleId` must be reverse-DNS/);
+  assert.match(errs({ bundleId: "com.example/x" }), /`bundleId` must be reverse-DNS/);
+});

@@ -28,6 +28,16 @@
       "type": "string",
       "minLength": 1
     },
+    "bundleId": {
+      "description": "macOS bundle identifier, reverse-DNS. Defaults to dev.kestrel.app.<appId>. Set it to a domain you own before shipping.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$"
+    },
+    "icon": {
+      "description": "The app icon: a square PNG, at least 512\u00d7512 (1024\u00d71024 is best). `kestrel build` makes every platform's sizes from it. Defaults to the Kestrel icon.",
+      "type": "string",
+      "pattern": "\\.[pP][nN][gG]$"
+    },
     "width": {
       "description": "Initial window width in logical pixels.",
       "type": "number",

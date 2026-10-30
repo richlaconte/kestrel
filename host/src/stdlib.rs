@@ -85,7 +85,7 @@ pub struct OpenOptions {
 pub async fn window_open(
     app: AppHandle,
     manifest: State<'_, Manifest>,
-    storage: State<'_, window::Storage>,
+    shared: State<'_, window::Shared>,
     path: String,
     opts: Option<OpenOptions>,
 ) -> Result<String, KestrelError> {
@@ -137,7 +137,7 @@ pub async fn window_open(
         opts.height.unwrap_or(manifest.height),
     );
     let mut b = o
-        .apply(window::app_window(&app, &label, url, &storage))
+        .apply(window::app_window(&app, &label, url, &shared).map_err(window_err)?)
         .title(opts.title.as_deref().unwrap_or(&manifest.title))
         .inner_size(w, h);
     if o.center {

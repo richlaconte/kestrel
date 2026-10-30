@@ -18,28 +18,34 @@ use tauri::{Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::{error::KestrelError, serve};
 
-/// The app's webview storage, shared by all its windows.
+/// What all the app's windows share: its webview storage and its icon.
 #[derive(Clone)]
-pub struct Storage {
+pub struct Shared {
     pub dir: PathBuf,
     pub store_id: [u8; 16],
+    /// The window icon (Windows and Linux; macOS shows the bundle's).
+    pub icon: Option<tauri::image::Image<'static>>,
 }
 
 /// A window showing `url` with the policy every app window gets: the app's
-/// own storage, and a lock that keeps it on the app.
+/// own storage and icon, and a lock that keeps it on the app.
 pub fn app_window<'a, R: Runtime, M: tauri::Manager<R>>(
     manager: &'a M,
     label: &str,
     url: tauri::Url,
-    storage: &Storage,
-) -> WebviewWindowBuilder<'a, R, M> {
-    WebviewWindowBuilder::new(manager, label, WebviewUrl::External(url))
+    shared: &Shared,
+) -> tauri::Result<WebviewWindowBuilder<'a, R, M>> {
+    let mut b = WebviewWindowBuilder::new(manager, label, WebviewUrl::External(url));
+    if let Some(icon) = &shared.icon {
+        b = b.icon(icon.clone())?;
+    }
+    Ok(b
         // Every app shares this binary and the kestrel://localhost
         // origin, so storage must be split per app explicitly:
         // a data directory on Windows/Linux, a data store on macOS
         // (14+; older macOS falls back to the shared default store).
-        .data_directory(storage.dir.clone())
-        .data_store_identifier(storage.store_id)
+        .data_directory(shared.dir.clone())
+        .data_store_identifier(shared.store_id)
         // The window only ever shows the app. External links open
         // in the system browser; anything else is refused.
         .on_navigation(|url| {
@@ -58,7 +64,7 @@ pub fn app_window<'a, R: Runtime, M: tauri::Manager<R>>(
                 }
             }
             tauri::webview::NewWindowResponse::Deny
-        })
+        }))
 }
 
 /// The URL of one of the app's pages, from a path like "/settings" or

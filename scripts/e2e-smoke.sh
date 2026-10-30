@@ -51,15 +51,37 @@ if [ "$TEMPLATE" = "react" ]; then
   # The app typechecks as shipped, kestreljs/native/host types included.
   node node_modules/typescript/bin/tsc --noEmit -p .
   echo "OK: template typechecks"
-
-  echo "== build (portable bundle) =="
-  $KESTREL build .
-  echo "== run bundle from a foreign cwd =="
-  FOREIGN="$(mktemp -d)"
-  ( cd "$FOREIGN" && KESTREL_EXIT_AFTER_MS=12000 "$OLDPWD/build/smoke-app/smoke-app" )
-  # Same appId, same data dir: the bundle picks up dev's count.
-  grep -q '"visits": *2' "$DATA/kestrel-data.json" || { echo "FAIL: bundle IPC never ran" >&2; exit 1; }
-  test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -A "$FOREIGN")" >&2; exit 1; }
-  echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
-  rm_tree "$FOREIGN"
 fi
+
+# Both templates: the vanilla one builds from "frontend": ".", which holds
+# build/ itself.
+echo "== build =="
+$KESTREL build . --dmg # --dmg: macOS only, ignored elsewhere
+for f in icon.icns icon.ico 16x16.png 256x256.png 1024x1024.png; do
+  test -s "build/icons/$f" || { echo "FAIL: build/icons/$f missing" >&2; exit 1; }
+done
+if [ "$(uname)" = Darwin ]; then
+  # A real .app (#24): Info.plist, icon, manifest in Resources, signed.
+  APP="$PWD/$(ls -d build/*.app)"
+  EXE="$APP/Contents/MacOS/smoke-app"
+  RES="$APP/Contents/Resources"
+  plutil -lint "$APP/Contents/Info.plist" >/dev/null
+  [ "$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist")" = smoke-app ]
+  test -s "$RES/icon.icns"
+  codesign --verify --strict "$APP"
+  hdiutil verify build/*.dmg >/dev/null
+  echo "OK: $(basename "$APP") is a signed .app"
+else
+  RES="$PWD/build/smoke-app"
+  EXE="$RES/smoke-app"
+fi
+test -s "$RES/kestrel.json" && test -s "$RES/icon.png"
+test ! -e "$RES/app/build" || { echo "FAIL: build/ was copied into the bundle" >&2; exit 1; }
+echo "== run bundle from a foreign cwd =="
+FOREIGN="$(mktemp -d)"
+( cd "$FOREIGN" && KESTREL_EXIT_AFTER_MS=12000 "$EXE" )
+# Same appId, same data dir: the bundle picks up dev's count.
+grep -q '"visits": *2' "$DATA/kestrel-data.json" || { echo "FAIL: bundle IPC never ran" >&2; exit 1; }
+test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -A "$FOREIGN")" >&2; exit 1; }
+echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
+rm_tree "$FOREIGN"
