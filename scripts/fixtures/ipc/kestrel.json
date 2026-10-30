@@ -1,0 +1,8 @@
+{
+  "appId": "kestrel-ipc-fixture",
+  "title": "IPC fixture",
+  "width": 400,
+  "height": 300,
+  "frontend": ".",
+  "native": "native.js"
+}

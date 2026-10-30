@@ -33,6 +33,12 @@ jobs:
       - name: Install workspace
         run: npm install
 
+      - name: Unit tests
+        run: npm test
+
+      - name: E2E IPC contract (async, errors, non-blocking)
+        run: xvfb-run -a -s "-screen 0 1024x768x24" bash scripts/e2e-ipc.sh
+
       - name: E2E smoke (react template)
         run: xvfb-run -a -s "-screen 0 1024x768x24" bash scripts/e2e-smoke.sh react
 

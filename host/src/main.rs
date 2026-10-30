@@ -107,11 +107,37 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
             ctx.eval::<(), _>(
                 r#"
                 globalThis.native = {};
+                // Calls are serialized per engine (RFC-0001 §4(b)), so one
+                // settle slot is enough. A sync result settles immediately;
+                // a thenable settles once the host drains the job queue.
+                let __kestrel_slot = null;
+                const __kestrel_json = (v) => JSON.stringify(v === undefined ? null : v);
+                const __kestrel_msg = (e) =>
+                    e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
                 function __kestrel_dispatch(name, argsJson) {
                     const fn = globalThis.native[name];
-                    if (!fn) throw new Error("no native function: " + name);
+                    if (typeof fn !== "function") throw new Error("no native function: " + name);
                     const result = fn(JSON.parse(argsJson));
-                    return JSON.stringify(result === undefined ? null : result);
+                    if (result && typeof result.then === "function") {
+                        const slot = (__kestrel_slot = { done: false });
+                        result.then(
+                            (v) => {
+                                try { slot.ok = __kestrel_json(v); }
+                                catch (e) { slot.err = __kestrel_msg(e); }
+                                slot.done = true;
+                            },
+                            (e) => { slot.err = __kestrel_msg(e); slot.done = true; },
+                        );
+                    } else {
+                        __kestrel_slot = { done: true, ok: __kestrel_json(result) };
+                    }
+                }
+                // "p" pending, "o<json>" resolved, "e<message>" rejected.
+                function __kestrel_settle() {
+                    const s = __kestrel_slot;
+                    if (!s || !s.done) return "p";
+                    __kestrel_slot = null;
+                    return s.err !== undefined ? "e" + s.err : "o" + s.ok;
                 }
                 "#,
             )
@@ -126,16 +152,40 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
 
         while let Ok((name, args, reply)) = rx.recv() {
             let res = context.with(|ctx| -> Result<String, String> {
-                let dispatch: Function = ctx
-                    .globals()
-                    .get("__kestrel_dispatch")
-                    .map_err(|e| e.to_string())?;
-                dispatch.call::<_, String>((name, args)).map_err(|e| {
+                let js_err = |e: rquickjs::Error| {
                     // Surface the JS exception message when there is one.
                     let exc = ctx.catch();
                     exc.as_exception()
                         .and_then(|x| x.message())
                         .unwrap_or_else(|| e.to_string())
+                };
+                let globals = ctx.globals();
+                let dispatch: Function = globals.get("__kestrel_dispatch").map_err(js_err)?;
+                dispatch.call::<_, ()>((name.clone(), args)).map_err(js_err)?;
+                Ok(name)
+            });
+            // Drive promises: run queued jobs until the call settles or no
+            // work is left. No host async bindings exist yet, so a promise
+            // still pending after the queue drains can never settle.
+            let res = res.and_then(|name| {
+                while rt.is_job_pending() {
+                    if rt.execute_pending_job().is_err() {
+                        break; // the exception lands in the promise's rejection
+                    }
+                }
+                context.with(|ctx| -> Result<String, String> {
+                    let settle: Function = ctx
+                        .globals()
+                        .get("__kestrel_settle")
+                        .map_err(|e| e.to_string())?;
+                    let out: String = settle.call(()).map_err(|e| e.to_string())?;
+                    match out.split_at(1) {
+                        ("o", json) => Ok(json.to_string()),
+                        ("e", msg) => Err(msg.to_string()),
+                        _ => Err(format!(
+                            "native function `{name}` returned a promise that never settled"
+                        )),
+                    }
                 })
             });
             let _ = reply.send(res);
@@ -162,9 +212,11 @@ fn kv_get(state: State<Kv>, key: String) -> Option<String> {
 }
 
 /// Bridge: webview -> user's native function inside the embedded engine.
+/// `async` so Tauri runs it off the main thread: a slow native function must
+/// never freeze painting or input. No timeout: long jobs are legitimate.
 #[tauri::command]
-fn call_native(
-    engine: State<NativeEngine>,
+async fn call_native(
+    engine: State<'_, NativeEngine>,
     name: String,
     args: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
@@ -177,9 +229,10 @@ fn call_native(
         .unwrap()
         .send((name, args.to_string(), rtx))
         .map_err(|e| e.to_string())?;
-    let json = rrx
-        .recv_timeout(std::time::Duration::from_secs(10))
-        .map_err(|e| e.to_string())??;
+    let json = tauri::async_runtime::spawn_blocking(move || rrx.recv())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|_| "native engine stopped".to_string())??;
     serde_json::from_str(&json).map_err(|e| e.to_string())
 }
 
