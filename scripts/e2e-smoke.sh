@@ -48,6 +48,9 @@ if [ "$TEMPLATE" = "react" ]; then
   test -f native-client.ts
   grep -q "Promise<string>" native-client.ts
   echo "OK: typed stubs present"
+  # The app typechecks as shipped, kestreljs/native/host types included.
+  node node_modules/typescript/bin/tsc --noEmit -p .
+  echo "OK: template typechecks"
 
   echo "== build (portable bundle) =="
   $KESTREL build .

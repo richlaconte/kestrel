@@ -454,18 +454,19 @@ footer a:hover { color: var(--text); }
         </div>
 <pre class="pane" id="p-native"><code><span class="c">// Runs inside the host process, not the webview.</span>
 <span class="c">// Plain TypeScript. No Rust, no Node, no preload.</span>
+<span class="k">import</span> { fs } <span class="k">from</span> <span class="s">"kestreljs/native/host"</span>;
 
 <span class="k">export function</span> <span class="f">greet</span>(args: { name: <span class="t">string</span> }): <span class="t">string</span> {
   <span class="k">return</span> <span class="s">`Hello, ${</span>args.name<span class="s">}! From inside the host.`</span>;
 }
 
-<span class="k">export function</span> <span class="f">visitCount</span>(): <span class="t">number</span> {
+<span class="k">export async function</span> <span class="f">visitCount</span>(): <span class="t">Promise</span>&lt;<span class="t">number</span>&gt; {
   <span class="c">// "fs:app-data" in kestrel.json: this file lives in the app's data dir.</span>
-  <span class="k">const</span> data = <span class="f">hostExists</span>(<span class="s">"visits.json"</span>)
-    ? <span class="t">JSON</span>.<span class="f">parse</span>(<span class="f">hostReadFile</span>(<span class="s">"visits.json"</span>))
+  <span class="k">const</span> data = (<span class="k">await</span> fs.<span class="f">exists</span>(<span class="s">"visits.json"</span>))
+    ? <span class="t">JSON</span>.<span class="f">parse</span>(<span class="k">await</span> fs.<span class="f">readText</span>(<span class="s">"visits.json"</span>))
     : { visits: <span class="t">0</span> };
   data.visits += <span class="t">1</span>;
-  <span class="f">hostWriteFile</span>(<span class="s">"visits.json"</span>, <span class="t">JSON</span>.<span class="f">stringify</span>(data));
+  <span class="k">await</span> fs.<span class="f">writeText</span>(<span class="s">"visits.json"</span>, <span class="t">JSON</span>.<span class="f">stringify</span>(data));
   <span class="k">return</span> data.visits;
 }</code></pre>
 <pre class="pane" id="p-app" hidden><code><span class="k">import</span> { useState } <span class="k">from</span> <span class="s">"react"</span>;

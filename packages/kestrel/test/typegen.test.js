@@ -171,6 +171,107 @@ test("compiled module exposes every export on globalThis.native", () => {
   assert.equal(g.native.b(), 2);
 });
 
+/** Write files into a temp app dir (native.ts is the entry), then run typegen. */
+function genApp(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
+  for (const [f, src] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
+    fs.writeFileSync(path.join(dir, f), src);
+  }
+  const res = runTypegen(dir, { native: "native.ts" });
+  const client = fs.readFileSync(path.join(dir, "native-client.ts"), "utf8");
+  return { dir, res, client };
+}
+
+/** Eval the compiled module the way the host does, with `globals` installed. */
+function load(res, globals = {}) {
+  const g = { ...globals };
+  new Function("globalThis", fs.readFileSync(res.compiled, "utf8"))(g);
+  return g.native;
+}
+
+test("native.ts can import sibling files and pure-JS npm packages (#20)", () => {
+  const { dir, res } = genApp({
+    "native.ts": `
+      import { shout } from "./lib/text";
+      import pad from "left-pad-esm";
+      import cjs from "cjs-only";
+      export function hello(args: { name: string }): string { return pad(shout(args.name), 8) + cjs.suffix; }
+    `,
+    "lib/text.ts": `export const shout = (s: string) => s.toUpperCase();`,
+    "node_modules/left-pad-esm/package.json": `{ "name": "left-pad-esm", "module": "index.mjs" }`,
+    "node_modules/left-pad-esm/index.mjs": `export default (s, n) => s.padStart(n, ".");`,
+    "node_modules/cjs-only/package.json": `{ "name": "cjs-only", "main": "index.js" }`,
+    "node_modules/cjs-only/index.js": `module.exports = { suffix: "!" };`,
+  });
+  assert.equal(load(res).hello({ name: "kes" }), ".....KES!");
+  assert.deepEqual(
+    res.inputs.map((f) => path.relative(dir, f).replace(/\\/g, "/")).sort(),
+    ["lib/text.ts", "native.ts"],
+    "inputs are the app's own files, not node_modules",
+  );
+  assert.ok(fs.existsSync(res.compiled + ".map"), "a source map sits next to the bundle");
+});
+
+test("kestreljs/native/host maps onto the host's bindings (#20)", async () => {
+  const { res } = genApp({
+    "native.ts": `
+      import { fs, log } from "kestreljs/native/host";
+      export async function roundTrip(): Promise<string> {
+        await fs.writeText("a.txt", "hi");
+        log("wrote", { n: 1 });
+        return (await fs.exists("a.txt")) ? fs.readText("a.txt") : "missing";
+      }
+    `,
+  });
+  const files = {};
+  const logged = [];
+  const native = load(res, {
+    hostReadFile: (p) => files[p],
+    hostWriteFile: (p, c) => void (files[p] = c),
+    hostExists: (p) => p in files,
+    hostLog: (m) => logged.push(m),
+  });
+  assert.equal(await native.roundTrip(), "hi");
+  assert.deepEqual(logged, ['wrote {"n":1}']);
+
+  // No fs grant: the bindings are absent and calls reject with a code.
+  const e = await load(res, { hostLog() {} }).roundTrip().catch((x) => x);
+  assert.equal(e.code, "permission_denied");
+  assert.match(e.message, /fs\.writeText needs the "fs:app-data" or "fs:all" permission/);
+});
+
+test("importing a Node built-in fails with a pointed message (#20)", () => {
+  assert.throws(
+    () => gen(`import { readFileSync } from "node:fs";\nexport function f(): string { return readFileSync("x", "utf8"); }`),
+    (e) =>
+      e instanceof TypegenError &&
+      /native\.ts:1:\d+: "node:fs" is a Node\.js module/.test(e.message) &&
+      /kestreljs\/native\/host/.test(e.message),
+  );
+  assert.throws(
+    () => gen(`import { nope } from "./missing";\nexport function f(): number { return nope; }`),
+    (e) => e instanceof TypegenError && /native\.ts:1:\d+: Could not resolve "\.\/missing"/.test(e.message),
+  );
+});
+
+test("types imported from another file must be re-exported (#20)", () => {
+  const ok = genApp({
+    "native.ts": `import type { Note } from "./types";\nexport type { Note } from "./types";\nexport function get(): Note { return { text: "" }; }`,
+    "types.ts": `export interface Note { text: string }`,
+  });
+  assert.match(ok.client, /import type \{ Note \} from "\.\/native";/);
+  assertCompiles(ok.dir);
+  assert.throws(
+    () =>
+      genApp({
+        "native.ts": `import type { Note } from "./types";\nexport function get(): Note { return { text: "" }; }`,
+        "types.ts": `export interface Note { text: string }`,
+      }),
+    (e) => e instanceof TypegenError && /which native\.ts imports\. Re-export it/.test(e.message),
+  );
+});
+
 test("vanilla .js native modules still produce a JS client", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
   fs.writeFileSync(path.join(dir, "native.js"), "native.hello = () => 1;\nnative.bye = () => 2;\n");
