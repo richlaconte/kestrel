@@ -369,11 +369,12 @@ fn main() {
         frontend_dir,
         fs_scope,
     } = prepare(&manifest_path).unwrap_or_else(|e| fail(e));
-    let fs = fs_scope.map(|s| {
-        scope::app_data_dir(&manifest.app_id)
-            .and_then(|d| scope::Fs::new(s, &d))
-            .unwrap_or_else(|e| fail(e))
-    });
+    // Everything per-app derives from appId, never the shared host
+    // identifier: native file access and the webview's own storage.
+    let data_dir = scope::app_data_dir(&manifest.app_id).unwrap_or_else(|e| fail(e));
+    let fs = fs_scope.map(|s| scope::Fs::new(s, &data_dir).unwrap_or_else(|e| fail(e)));
+    let webview_dir = scope::webview_data_dir(&data_dir);
+    let store_id = scope::webview_store_id(&manifest.app_id);
 
     // Test hook for headless CI runs of built bundles.
     if let Ok(ms) = std::env::var("KESTREL_EXIT_AFTER_MS") {
@@ -421,6 +422,12 @@ fn main() {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title(&window_cfg.title)
                 .inner_size(window_cfg.width, window_cfg.height)
+                // Every app shares this binary and the kestrel://localhost
+                // origin, so storage must be split per app explicitly:
+                // a data directory on Windows/Linux, a data store on macOS
+                // (14+; older macOS falls back to the shared default store).
+                .data_directory(webview_dir)
+                .data_store_identifier(store_id)
                 // The window only ever shows the app. External links open
                 // in the system browser; anything else is refused.
                 .on_navigation(|url| {

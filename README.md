@@ -62,6 +62,10 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   `%APPDATA%\<appId>`, `$XDG_DATA_HOME/<appId>`), never the process cwd. Paths
   outside it, `..` and symlink escapes throw `permission_denied`. An ungranted binding
   simply doesn't exist
+- **Each app gets its own webview storage**, even though every app shares the host
+  binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
+  keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on
+  macOS 14+; older macOS falls back to one shared store)
 - **The React + Vite template has real HMR in the native window.** In dev, the
   `kestrel://` protocol reverse-proxies to Vite (methods, headers and bodies), so the
   window origin and the IPC policy are the same in dev and prod. Only the app's own
@@ -76,7 +80,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   from any directory
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-webview storage isolated per app, permissions beyond the filesystem, the full
+permissions beyond the filesystem, the full
 `kestrel/native` std-lib, and signed installers with auto-update on top of `build`. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the

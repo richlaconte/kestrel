@@ -74,6 +74,9 @@ jobs:
       - name: E2E serving (dev proxy, MIME types, SPA fallback)
         run: eval "$RUN bash scripts/e2e-serve.sh"
 
+      - name: E2E webview storage isolated per app
+        run: eval "$RUN bash scripts/e2e-storage.sh"
+
       - name: E2E smoke (react template)
         run: eval "$RUN bash scripts/e2e-smoke.sh react"
 

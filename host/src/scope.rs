@@ -54,6 +54,32 @@ pub fn app_data_dir(app_id: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| "cannot determine the platform data directory".to_string())
 }
 
+/// Kestrel's own state inside the app data dir (the webview's storage:
+/// localStorage, IndexedDB, cookies). Native code can't reach it under
+/// `fs:app-data`.
+pub const RESERVED: &str = ".kestrel";
+
+/// Where the webview keeps its storage for this app (Windows, Linux).
+pub fn webview_data_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join(RESERVED).join("webview")
+}
+
+/// A stable 16-byte id for the app's WKWebView data store (macOS 14+, which
+/// has no data directory setting). Two 64-bit FNV-1a passes over the app id
+/// with different offset bases: not cryptographic, only needs to be stable
+/// across launches and distinct between app ids.
+pub fn webview_store_id(app_id: &str) -> [u8; 16] {
+    let fnv = |basis: u64| {
+        app_id.bytes().fold(basis, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    };
+    let mut id = [0u8; 16];
+    id[..8].copy_from_slice(&fnv(0xcbf2_9ce4_8422_2325).to_be_bytes());
+    id[8..].copy_from_slice(&fnv(0x6c62_272e_07bb_0142).to_be_bytes());
+    id
+}
+
 /// A filesystem grant: a scope plus the app's (canonical) data dir.
 #[derive(Clone, Debug)]
 pub struct Fs {
@@ -117,6 +143,19 @@ impl Fs {
             return Err(format!(
                 "permission_denied: {p} is outside the app data dir (fs:app-data)"
             ));
+        }
+        // Case-insensitive: macOS and Windows filesystems usually are.
+        let first = real
+            .strip_prefix(&self.root)
+            .ok()
+            .and_then(|r| r.components().next())
+            .or_else(|| tail.last().map(|n| Component::Normal(n.as_os_str())));
+        if let Some(Component::Normal(n)) = first {
+            if n.to_string_lossy().eq_ignore_ascii_case(RESERVED) {
+                return Err(format!(
+                    "permission_denied: {p} is Kestrel's own storage, not app data"
+                ));
+            }
         }
         Ok(tail.iter().rev().fold(real, |acc, n| acc.join(n)))
     }
@@ -227,6 +266,36 @@ mod tests {
         let e = fs.write(outside.to_str().unwrap(), "x").unwrap_err();
         assert!(e.starts_with("permission_denied:"), "{e}");
         assert_eq!(std::fs::read_to_string(&outside).unwrap(), "s");
+    }
+
+    #[test]
+    fn app_data_refuses_kestrels_own_storage() {
+        let fs = Fs::new(FsScope::AppData, &tmp("res").join("data")).unwrap();
+        std::fs::create_dir_all(webview_data_dir(&fs.root)).unwrap();
+        for p in [
+            ".kestrel/webview/x",
+            ".kestrel",
+            ".KESTREL/new.txt",
+            "./.kestrel/x",
+        ] {
+            let e = fs.write(p, "x").unwrap_err();
+            assert!(e.starts_with("permission_denied:"), "{p}: {e}");
+        }
+        let abs = fs.root.join(".kestrel/webview/x");
+        assert!(fs
+            .read(abs.to_str().unwrap())
+            .unwrap_err()
+            .starts_with("permission_denied:"));
+        // Lookalikes are ordinary app data.
+        fs.write(".kestrel-notes.txt", "ok").unwrap();
+        fs.write("sub/.kestrel/x", "ok").unwrap();
+    }
+
+    #[test]
+    fn store_ids_are_stable_and_distinct() {
+        assert_eq!(webview_store_id("my-app"), webview_store_id("my-app"));
+        assert_ne!(webview_store_id("my-app"), webview_store_id("my-app2"));
+        assert_ne!(webview_store_id("a"), webview_store_id("b"));
     }
 
     #[cfg(unix)]
