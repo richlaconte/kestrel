@@ -62,8 +62,8 @@ for f in icon.icns icon.ico 16x16.png 256x256.png 1024x1024.png; do
 done
 if [ "$(uname)" = Darwin ]; then
   # A real .app (#24): Info.plist, icon, manifest in Resources, signed.
-  APP="$PWD/$(ls -d build/*.app)"
-  EXE="$APP/Contents/MacOS/smoke-app"
+  EXE="$(built_exe smoke-app)"
+  APP="$(dirname "$(dirname "$(dirname "$EXE")")")"
   RES="$APP/Contents/Resources"
   plutil -lint "$APP/Contents/Info.plist" >/dev/null
   [ "$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist")" = smoke-app ]
@@ -72,8 +72,8 @@ if [ "$(uname)" = Darwin ]; then
   hdiutil verify build/*.dmg >/dev/null
   echo "OK: $(basename "$APP") is a signed .app"
 else
-  RES="$PWD/build/smoke-app"
-  EXE="$RES/smoke-app"
+  EXE="$(built_exe smoke-app)"
+  RES="$(dirname "$EXE")"
 fi
 test -s "$RES/kestrel.json" && test -s "$RES/icon.png"
 test ! -e "$RES/app/build" || { echo "FAIL: build/ was copied into the bundle" >&2; exit 1; }
