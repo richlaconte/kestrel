@@ -2,7 +2,7 @@
 # E2E webview std-lib (#17, #18): app, window, fs and store called straight
 # from the webview through kestrel-native, with no native.ts. Runs the app
 # twice (the store must survive a restart), checks app.quit() ends the host
-# well before its safety timer, then runs it again without an fs grant.
+# well before its safety timer (150 s), then runs it again without an fs grant.
 # Usage: e2e-stdlib.sh   (run under xvfb-run in CI)
 set -euo pipefail
 . "$(dirname "$0")/e2e-lib.sh"
@@ -24,8 +24,10 @@ run() { # run <granted|ungranted> <run number>
     "$1" "$perms" > "$1.kestrel.json"
   mkdir -p "data-$1"
   local t0=$SECONDS
-  KESTREL_DATA_DIR="$(native_path "$WORK/data-$1")" KESTREL_EXIT_AFTER_MS=30000 "$HOST" "$1.kestrel.json"
-  [ $((SECONDS - t0)) -lt 25 ] || { echo "FAIL: app.quit() didn't end the host" >&2; exit 1; }
+  KESTREL_DATA_DIR="$(native_path "$WORK/data-$1")" KESTREL_EXIT_AFTER_MS=150000 "$HOST" "$1.kestrel.json"
+  # WebKitGTK under xvfb takes ~30 s to show a first page in CI; quitting
+  # must still beat the safety timer by a wide margin.
+  [ $((SECONDS - t0)) -lt 120 ] || { echo "FAIL: app.quit() didn't end the host" >&2; exit 1; }
   local result="data-$1/stdlib-result.json"
   if [ "$1" = ungranted ]; then
     # No fs grant: the fixture reported through the store; read it back.
