@@ -72,7 +72,7 @@ For app-specific privileged logic, the developer exports plain functions:
 
 ```ts
 // native.ts — runs INSIDE the host (QuickJS), never in the webview
-import { fs } from "kestrel/native/host";
+import { fs } from "kestreljs/native/host";
 
 export async function importCsv(args: { path: string }): Promise<{ rows: number }> {
   const raw = await fs.readText(args.path);
@@ -94,10 +94,16 @@ Semantics, all spike-verified except (d):
 - (b) **Dispatch:** name + structured-clone-able args in, structured result out. One
   engine thread per app in v0; calls are serialized (documented, revisit if real apps hit it).
 - (c) **State:** module scope persists for the app's lifetime — caches and handles are fine.
+  In `kestrel dev`, saving `native.ts` (or anything it imports) reloads the module into a
+  fresh engine, so state resets on each reload.
 - (d) **Async (open edge from spike 2):** natives may be `async`; the host pumps the
   engine's job queue. Host bindings are the only await points, so starvation is bounded.
 - (e) **Compute:** no JIT; glue-code fast, number-crunching slow. The documented answer
   for heavy compute is a Rust plugin (v1) or WASM in the webview — not a bigger JS engine.
+- (f) **Modules:** the CLI bundles `native.ts` with esbuild (ES2020, one IIFE script), so it
+  can import sibling files and pure-JS npm packages. Node built-ins don't exist in QuickJS
+  and are a build error. `kestreljs/native/host` is a typed module over the host bindings
+  (shipped in the CLI package, which is why it isn't spelled `kestrel/native/host`).
 
 ## 5. Typegen contract
 

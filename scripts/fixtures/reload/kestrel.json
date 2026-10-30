@@ -1,0 +1,7 @@
+{
+  "appId": "kestrel-e2e-reload",
+  "title": "Reload",
+  "frontend": ".",
+  "native": "native.ts",
+  "permissions": ["fs:app-data"]
+}

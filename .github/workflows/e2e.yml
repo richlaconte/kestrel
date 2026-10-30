@@ -77,6 +77,9 @@ jobs:
       - name: E2E webview storage isolated per app
         run: eval "$RUN bash scripts/e2e-storage.sh"
 
+      - name: E2E native hot-reload (bundled imports, reload without restart)
+        run: eval "$RUN bash scripts/e2e-reload.sh"
+
       - name: E2E smoke (react template)
         run: eval "$RUN bash scripts/e2e-smoke.sh react"
 

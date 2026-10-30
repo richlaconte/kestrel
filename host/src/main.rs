@@ -48,6 +48,11 @@ struct Manifest {
     /// bindings beyond logging, a pure sandboxed webview.
     #[serde(default)]
     permissions: Vec<String>,
+    /// Dev only: reload the native module from disk whenever a
+    /// `reload-native` line arrives on stdin. `kestrel dev` sends one after
+    /// it recompiles native.ts.
+    #[serde(default)]
+    dev_reload: bool,
     /// Headless-run safety net: exit after N ms so CI runs always terminate.
     #[serde(default)]
     exit_after_ms: Option<u64>,
@@ -62,24 +67,62 @@ fn default_height() -> f64 {
 
 // ---- native-functions engine (QuickJS on a dedicated thread) ----
 
-type NativeCall = (
-    String, // function name
-    String, // args as JSON
-    std::sync::mpsc::Sender<Result<String, KestrelError>>,
-);
+/// What the engine thread receives: a call, or (dev only) an order to reload
+/// the native module from disk.
+enum EngineMsg {
+    Call(
+        String, // function name
+        String, // args as JSON
+        std::sync::mpsc::Sender<Result<String, KestrelError>>,
+    ),
+    Reload,
+}
 
-struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<NativeCall>>>);
+struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<EngineMsg>>>);
 
 // Engine: rquickjs (QuickJS with first-class MSVC support — the earlier
 // quick-js crate could not build on Windows, which blocked the CI matrix).
+// One engine thread per app; calls and reloads are handled in order, so a
+// reload never lands in the middle of a call.
 fn start_native_engine(
     script_path: PathBuf,
     fs: Option<scope::Fs>,
-) -> std::sync::mpsc::Sender<NativeCall> {
-    use rquickjs::{function::Func, Context, Ctx, Exception, Function, Runtime};
-
-    let (tx, rx) = std::sync::mpsc::channel::<NativeCall>();
+) -> std::sync::mpsc::Sender<EngineMsg> {
+    let (tx, rx) = std::sync::mpsc::channel::<EngineMsg>();
     std::thread::spawn(move || {
+        let mut engine = LoadedModule::load(&script_path, fs.clone());
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                EngineMsg::Call(name, args, reply) => {
+                    let _ = reply.send(engine.call(&name, args));
+                }
+                // A fresh runtime: module state resets, as documented.
+                EngineMsg::Reload => {
+                    engine = LoadedModule::load(&script_path, fs.clone());
+                    if engine.load_error.is_none() {
+                        eprintln!("kestrel-host: native module reloaded");
+                    }
+                }
+            }
+        }
+    });
+    tx
+}
+
+/// A QuickJS runtime with the prelude, the granted bindings and the user's
+/// module evaluated. A module that fails to load keeps the error and rejects
+/// every call with it.
+struct LoadedModule {
+    // Field order is drop order: the context goes before its runtime.
+    context: rquickjs::Context,
+    rt: rquickjs::Runtime,
+    load_error: Option<KestrelError>,
+}
+
+impl LoadedModule {
+    fn load(script_path: &Path, fs: Option<scope::Fs>) -> Self {
+        use rquickjs::{function::Func, Context, Ctx, Exception, Runtime};
+
         let rt = Runtime::new().expect("quickjs runtime");
         let context = Context::full(&rt).expect("quickjs context");
 
@@ -201,7 +244,7 @@ fn start_native_engine(
             // A broken module must not take the engine down: report it once
             // and reject every call with the same message.
             let file = script_path.display();
-            let user_src = match std::fs::read_to_string(&script_path) {
+            let user_src = match std::fs::read_to_string(script_path) {
                 Ok(src) => src,
                 Err(e) => {
                     return Some(KestrelError::new(
@@ -232,55 +275,56 @@ fn start_native_engine(
         if let Some(err) = &load_error {
             eprintln!("kestrel-host: error: {}", err.message);
         }
-
-        while let Ok((name, args, reply)) = rx.recv() {
-            if let Some(err) = &load_error {
-                let _ = reply.send(Err(err.clone()));
-                continue;
-            }
-            let internal = |e: rquickjs::Error| {
-                KestrelError::new("native_function", e.to_string())
-                    .with_detail(serde_json::json!({ "function": name }))
-            };
-            let res = context.with(|ctx| -> Result<(), KestrelError> {
-                let dispatch: Function =
-                    ctx.globals().get("__kestrel_dispatch").map_err(internal)?;
-                dispatch
-                    .call::<_, ()>((name.clone(), args))
-                    .map_err(internal)
-            });
-            // Drive promises: run queued jobs until the call settles or no
-            // work is left. No host async bindings exist yet, so a promise
-            // still pending after the queue drains can never settle.
-            let res = res.and_then(|()| {
-                while rt.is_job_pending() {
-                    if rt.execute_pending_job().is_err() {
-                        break; // the exception lands in the promise's rejection
-                    }
-                }
-                context.with(|ctx| -> Result<String, KestrelError> {
-                    let settle: Function =
-                        ctx.globals().get("__kestrel_settle").map_err(internal)?;
-                    let out: String = settle.call(()).map_err(internal)?;
-                    match out.split_at(1) {
-                        ("o", json) => Ok(json.to_string()),
-                        ("e", json) => Err(serde_json::from_str(json).unwrap_or_else(|_| {
-                            KestrelError::new("native_function", json.to_string())
-                        })),
-                        _ => Err(KestrelError::new(
-                            "native_function",
-                            format!(
-                                "native function `{name}` returned a promise that never settled"
-                            ),
-                        )
-                        .with_detail(serde_json::json!({ "function": name }))),
-                    }
-                })
-            });
-            let _ = reply.send(res);
+        LoadedModule {
+            context,
+            rt,
+            load_error,
         }
-    });
-    tx
+    }
+
+    fn call(&self, name: &str, args: String) -> Result<String, KestrelError> {
+        use rquickjs::Function;
+
+        let (rt, context) = (&self.rt, &self.context);
+        if let Some(err) = &self.load_error {
+            return Err(err.clone());
+        }
+        let internal = |e: rquickjs::Error| {
+            KestrelError::new("native_function", e.to_string())
+                .with_detail(serde_json::json!({ "function": name }))
+        };
+        let res = context.with(|ctx| -> Result<(), KestrelError> {
+            let dispatch: Function = ctx.globals().get("__kestrel_dispatch").map_err(internal)?;
+            dispatch
+                .call::<_, ()>((name.to_string(), args))
+                .map_err(internal)
+        });
+        // Drive promises: run queued jobs until the call settles or no
+        // work is left. No host async bindings exist yet, so a promise
+        // still pending after the queue drains can never settle.
+        res.and_then(|()| {
+            while rt.is_job_pending() {
+                if rt.execute_pending_job().is_err() {
+                    break; // the exception lands in the promise's rejection
+                }
+            }
+            context.with(|ctx| -> Result<String, KestrelError> {
+                let settle: Function = ctx.globals().get("__kestrel_settle").map_err(internal)?;
+                let out: String = settle.call(()).map_err(internal)?;
+                match out.split_at(1) {
+                    ("o", json) => Ok(json.to_string()),
+                    ("e", json) => Err(serde_json::from_str(json).unwrap_or_else(|_| {
+                        KestrelError::new("native_function", json.to_string())
+                    })),
+                    _ => Err(KestrelError::new(
+                        "native_function",
+                        format!("native function `{name}` returned a promise that never settled"),
+                    )
+                    .with_detail(serde_json::json!({ "function": name }))),
+                }
+            })
+        })
+    }
 }
 
 // ---- the generic command surface (spike subset of `kestrel/native`) ----
@@ -307,13 +351,23 @@ async fn call_native(
     let (rtx, rrx) = std::sync::mpsc::channel();
     tx.lock()
         .unwrap()
-        .send((name, args.to_string(), rtx))
+        .send(EngineMsg::Call(name, args.to_string(), rtx))
         .map_err(|_| stopped())?;
     let json = tauri::async_runtime::spawn_blocking(move || rrx.recv())
         .await
         .map_err(|_| stopped())?
         .map_err(|_| stopped())??;
     serde_json::from_str(&json).map_err(|e| KestrelError::new("native_function", e.to_string()))
+}
+
+/// Dev: turn each `reload-native` line into an engine reload, until the
+/// input or the engine goes away.
+fn watch_stdin_for_reloads(input: impl std::io::BufRead, tx: std::sync::mpsc::Sender<EngineMsg>) {
+    for line in input.lines().map_while(Result::ok) {
+        if line.trim() == "reload-native" && tx.send(EngineMsg::Reload).is_err() {
+            break;
+        }
+    }
 }
 
 /// A loaded manifest with every path resolved and checked.
@@ -434,6 +488,12 @@ fn main() {
             .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs))),
     );
 
+    if manifest.dev_reload {
+        if let Some(tx) = engine.0.as_ref().map(|m| m.lock().unwrap().clone()) {
+            std::thread::spawn(move || watch_stdin_for_reloads(std::io::stdin().lock(), tx));
+        }
+    }
+
     let window_cfg = manifest.clone();
 
     tauri::Builder::default()
@@ -532,7 +592,8 @@ mod tests {
         let tx = start_native_engine(script, fs);
         move |name, args| {
             let (rtx, rrx) = std::sync::mpsc::channel();
-            tx.send((name.into(), args.into(), rtx)).unwrap();
+            tx.send(EngineMsg::Call(name.into(), args.into(), rtx))
+                .unwrap();
             rrx.recv().unwrap()
         }
     }
@@ -631,6 +692,42 @@ mod tests {
         assert!(err.contains("native.js:2"), "{err}");
         // The engine stays up and keeps answering.
         assert_eq!(call("ok", "{}"), Err(err));
+    }
+
+    #[test]
+    fn reload_picks_up_new_code_resets_state_and_recovers_from_errors() {
+        let script =
+            app(&[("native.js", "let n = 0; native.v = () => ++n * 1;")]).join("native.js");
+        let tx = start_native_engine(script.clone(), None);
+        let call = |name: &str| {
+            let (rtx, rrx) = std::sync::mpsc::channel();
+            tx.send(EngineMsg::Call(name.into(), "{}".into(), rtx))
+                .unwrap();
+            rrx.recv().unwrap().map_err(|e| e.to_string())
+        };
+        assert_eq!(call("v"), Ok("1".into()));
+        assert_eq!(call("v"), Ok("2".into()));
+
+        fs::write(&script, "let n = 0; native.v = () => ++n * 10;").unwrap();
+        tx.send(EngineMsg::Reload).unwrap();
+        assert_eq!(call("v"), Ok("10".into()), "new code, fresh module state");
+
+        fs::write(&script, "native.v = (;").unwrap();
+        tx.send(EngineMsg::Reload).unwrap();
+        assert!(call("v").unwrap_err().contains("failed to load"));
+
+        fs::write(&script, "native.v = () => 'back';").unwrap();
+        tx.send(EngineMsg::Reload).unwrap();
+        assert_eq!(call("v"), Ok(r#""back""#.into()));
+    }
+
+    #[test]
+    fn stdin_reload_lines_become_engine_reloads() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        watch_stdin_for_reloads(&b"reload-native\nnoise\n  reload-native  \n"[..], tx);
+        let msgs: Vec<_> = rx.try_iter().collect();
+        assert_eq!(msgs.len(), 2);
+        assert!(msgs.iter().all(|m| matches!(m, EngineMsg::Reload)));
     }
 
     #[test]

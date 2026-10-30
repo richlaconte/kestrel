@@ -56,17 +56,19 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   routes survive a reload, and built apps get a default Content-Security-Policy
 - Native functions run in embedded QuickJS. Sync and `async` functions both work,
   calls never block the UI thread, and errors carry the JS message
-- **Manifest permissions scope native code.** `"permissions": ["fs:app-data"]` installs
-  `hostReadFile`, `hostWriteFile`, `hostExists` and `hostAppDataDir`. Relative paths
+- **Manifest permissions scope native code.** `"permissions": ["fs:app-data"]` enables
+  `fs.readText`, `fs.writeText`, `fs.exists` and `fs.appDataDir` from
+  `kestreljs/native/host` (the raw `hostReadFile`, `hostWriteFile`, `hostExists` and
+  `hostAppDataDir` globals underneath). Relative paths
   resolve in the per-app data directory (`~/Library/Application Support/<appId>`,
   `%APPDATA%\<appId>`, `$XDG_DATA_HOME/<appId>`), never the process cwd. Paths
   outside it, `..` and symlink escapes throw `permission_denied`. An ungranted binding
-  simply doesn't exist
+  simply doesn't exist, and its `fs.*` wrapper rejects with `permission_denied`
 - **Every failure is a `KestrelError`.** Generated stubs reject with an exported
   `KestrelError` carrying a `code` from a closed set (`permission_denied`, `not_found`,
   `io`, `native_function`, `cancelled`, `unsupported_platform`, `timeout`), a `message`
   and an optional `detail`, so `err instanceof KestrelError && err.code === "not_found"`
-  works. An uncaught `hostReadFile` miss keeps its `not_found` code; native code can
+  works. An uncaught `fs.readText` miss keeps its `not_found` code; native code can
   throw an error with its own `code` from the set
 - **Each app gets its own webview storage**, even though every app shares the host
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
@@ -76,9 +78,16 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   `kestrel://` protocol reverse-proxies to Vite (methods, headers and bodies), so the
   window origin and the IPC policy are the same in dev and prod. Only the app's own
   origin can use IPC, and the window can't navigate away from it
-- You write `native.ts` in TypeScript. It's compiled for the host engine, and typed
-  client stubs are generated with the TypeScript compiler API, including named types,
-  so a rename breaks the frontend at compile time
+- You write `native.ts` in TypeScript. It's bundled for the host engine with esbuild,
+  so it can import your own files and pure-JS npm packages (importing a Node built-in
+  fails with an error that says why). Typed client stubs are generated with the
+  TypeScript compiler API, including named types, so a rename breaks the frontend at
+  compile time
+- **Native code hot-reloads.** `kestrel dev` watches `native.ts` and everything it
+  imports. A save rebuilds the bundle and the stubs, and the host swaps in a fresh
+  engine, so the next call runs the new code without restarting the window. Module
+  state resets on reload. A broken save shows in Vite's error overlay, and the last
+  good module keeps running
 - `kestrel create` (react | vanilla), `kestrel typegen`, and `kestrel dev` (which picks
   a free port). `kestrel.json` is validated, with a published JSON Schema
 - **`kestrel build` makes an unsigned portable bundle:** the host binary renamed to the
