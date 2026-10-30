@@ -632,7 +632,7 @@ contextBridge.<span class="f">exposeInMainWorld</span>(<span class="s">"api"</sp
           <h3>IPC is a typed function call.</h3>
           <p><code>kestrel typegen</code> reads your <code>native.ts</code> with the TypeScript compiler and generates exact client stubs, with real parameter and return types. Renames break at compile time, not in front of your users.</p>
           <ul class="checks">
-            <li>Regenerated automatically by <code>kestrel dev</code>.</li>
+            <li>Regenerated every time <code>kestrel dev</code> or <code>kestrel build</code> starts.</li>
             <li>Real HMR into the native window. Dev and prod use the same <code>kestrel://</code> origin.</li>
           </ul>
         </div>
@@ -656,9 +656,9 @@ member named 'greet'. Did you mean 'welcome'?</code></pre>
         <div>
           <div class="pain">Electron: Node in the privileged process</div>
           <h3>Native code with least privilege built in.</h3>
-          <p>Native functions run in an embedded QuickJS engine <strong>inside the host process</strong>. It adds only 0.8 MB and needs no Node sidecar. There is no ambient <code>fs</code>, <code>fetch</code> or <code>child_process</code>: your code can only touch the bindings the host grants, and the webview can't touch anything at all.</p>
+          <p>Native functions run in an embedded QuickJS engine <strong>inside the host process</strong>. It adds only 0.8 MB and needs no Node sidecar. There is no ambient <code>fetch</code>, <code>require</code> or <code>child_process</code>: your code can only call the bindings the host exposes, and the webview can't touch the system at all.</p>
           <ul class="checks">
-            <li>Permissions are declared in the manifest and enforced by the host.</li>
+            <li>Next on the roadmap: manifest-declared permissions that scope each binding (<a href="https://github.com/richlaconte/kestrel/blob/main/docs/rfc-0001-native-api.md">RFC-0001 §6</a>).</li>
             <li>Heavy compute can move to Rust plugins or WASM later behind the same protocol.</li>
           </ul>
         </div>
