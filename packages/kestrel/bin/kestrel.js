@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runTypegen, TypegenError } from "../src/typegen.js";
 import { validateManifest } from "../src/manifest.js";
+import { errorFile, watchNative } from "../src/watch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -179,7 +180,8 @@ async function freePort(start) {
 async function dev(dir = ".") {
   dir = path.resolve(dir);
   const m = readManifest(dir);
-  const { compiled } = typegen(dir, { quiet: true });
+  fs.rmSync(errorFile(dir), { force: true });
+  const { compiled, inputs } = typegen(dir, { quiet: true });
   const host = resolveHost();
 
   const runtime = {
@@ -190,7 +192,10 @@ async function dev(dir = ".") {
     frontend: dir, // used only in static mode; host requires it either way
     permissions: m.permissions ?? [],
   };
-  if (compiled) runtime.native = path.resolve(compiled);
+  if (compiled) {
+    runtime.native = path.resolve(compiled);
+    runtime.devReload = true;
+  }
   const exitAfter = flag("exit-after");
   if (exitAfter) runtime.exitAfterMs = Number(exitAfter);
 
@@ -218,17 +223,36 @@ async function dev(dir = ".") {
   fs.writeFileSync(tmp, JSON.stringify(runtime, null, 2));
 
   info(`dev: ${m.title} (${m.appId})${runtime.devUrl ? " — HMR on" : ""}`);
-  const child = spawn(host, [tmp], { stdio: "inherit", cwd: dir });
+  // stdin is the reload channel: one `reload-native` line per rebuild.
+  const child = spawn(host, [tmp], { stdio: ["pipe", "inherit", "inherit"], cwd: dir });
+  child.stdin.on("error", () => {}); // host already gone; exit handles it
+  const stopWatching = compiled
+    ? watchNative(dir, m, inputs, {
+        onBuild(res) {
+          fs.rmSync(errorFile(dir), { force: true });
+          child.stdin.write("reload-native\n");
+          info(`native module rebuilt and reloaded — ${res.names.length} fn(s): ${res.names.join(", ")}`);
+        },
+        onError(message) {
+          // The overlay shows it in the window; the last good module keeps running.
+          fs.writeFileSync(errorFile(dir), JSON.stringify({ message }));
+          console.error(`\x1b[31mkestrel:\x1b[0m ${message}`);
+        },
+      })
+    : () => {};
   const shutdown = (code) => {
+    stopWatching();
     fs.rmSync(tmp, { force: true });
+    fs.rmSync(errorFile(dir), { force: true });
     killTree(vite);
     process.exit(code ?? 0);
   };
   child.on("exit", shutdown);
-  process.on("SIGINT", () => {
-    child.kill();
-    shutdown(0);
-  });
+  for (const sig of ["SIGINT", "SIGTERM"])
+    process.on(sig, () => {
+      child.kill();
+      shutdown(0);
+    });
 }
 
 // ---- build -----------------------------------------------------------------
