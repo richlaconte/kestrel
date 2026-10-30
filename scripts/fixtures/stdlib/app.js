@@ -2,7 +2,7 @@
 // each result or error code, report, then quit. kestrel-native.js is copied in
 // by scripts/e2e-stdlib.sh. With an fs grant the report goes through fs;
 // without one it goes through the store (which needs no permission).
-import { app, appWindow, fs, KestrelError, store } from "./kestrel-native.js";
+import { app, appWindow, clipboard, dialog, fs, KestrelError, notify, shell, store } from "./kestrel-native.js";
 
 const r = {};
 const step = async (name, f) => {
@@ -29,6 +29,16 @@ await step("exists", () => fs.exists("notes/a.txt"));
 await step("missing", () => fs.readText("nope.txt"));
 await step("escape", () => fs.readText("../outside.txt"));
 await step("storeFile", () => fs.readText(".kestrel/store.json"));
+// No modal opens: an invalid option is refused before the dialog is built.
+await step("badDialog", () => dialog.message({ message: "x", kind: "loud" }));
+const marker = `kestrel-e2e-${Date.now()}`;
+await step("clipWrite", () => clipboard.writeText(marker));
+await step("clipRead", async () => (await clipboard.readText()) === marker);
+// Refused schemes and non-URLs: nothing is ever opened.
+await step("openFile", () => shell.open("file:///etc/hosts"));
+await step("openJunk", () => shell.open("not a url"));
+// Only when ungranted: a real notification needs a bundled app on macOS.
+if (!permissions.includes("fs:app-data")) await step("notify", () => notify("e2e"));
 
 if (permissions.includes("fs:app-data")) await fs.writeText("stdlib-result.json", JSON.stringify(r));
 else await store.set("result", r);

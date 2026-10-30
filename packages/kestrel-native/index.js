@@ -74,3 +74,29 @@ export const store = {
   delete: (key) => invoke("store_delete", { key }),
   keys: () => invoke("store_keys"),
 };
+
+/**
+ * dialog — native file and message dialogs. Showing one needs no permission;
+ * with "fs:pick", what the user picks becomes readable/writable through `fs`.
+ * File dialogs resolve to the picked path, or null if the user cancelled.
+ */
+export const dialog = {
+  pickFile: (opts) => invoke("dialog_pick_file", { opts }),
+  pickFolder: (opts) => invoke("dialog_pick_folder", { opts }),
+  save: (opts) => invoke("dialog_save", { opts }),
+  message: (opts) => invoke("dialog_message", { opts: typeof opts === "string" ? { message: opts } : opts }),
+};
+
+/** notify — a system notification. Needs "notifications". */
+export const notify = (title, body) => invoke("notify", { title, body });
+
+/** clipboard — text only. Needs "clipboard". */
+export const clipboard = {
+  readText: () => invoke("clipboard_read_text"),
+  writeText: (text) => invoke("clipboard_write_text", { text }),
+};
+
+/** shell — open an http(s) or mailto link in the default app. Needs "shell:open". */
+export const shell = {
+  open: (url) => invoke("shell_open", { url }),
+};

@@ -54,11 +54,11 @@ Small on purpose; each module earned its place in the friction log or the plan's
 | `app` | `manifest()`, `version()`, `quit()` | |
 | `appWindow` | `setTitle()`, `minimize()`, `maximize()`, `close()`, `open(url, opts)` | one main window default; not `window`, which would shadow the DOM global |
 | `fs` | `readText(p)`, `writeText(p, s)`, `readBytes(p)`, `exists(p)`, `appDataDir()` | scope-gated, §6 |
-| `dialog` | `pickFile(opts)`, `pickFolder()`, `save(opts)`, `message(opts)` | native dialogs |
-| `notify` | `notify(title, body?)` | |
+| `dialog` | `pickFile(opts)`, `pickFolder()`, `save(opts)`, `message(opts)` | native dialogs; no permission to show one, `fs:pick` to use what's picked; cancel resolves `null` |
+| `notify` | `notify(title, body?)` | `notifications` |
 | `store` | `get(k)`, `set(k, v)`, `delete(k)`, `keys()` | durable KV in app-data; no permission needed |
-| `clipboard` | `readText()`, `writeText(s)` | |
-| `shell` | `open(url)` | opener only; no arbitrary exec in v0 |
+| `clipboard` | `readText()`, `writeText(s)` | `clipboard` |
+| `shell` | `open(url)` | `shell:open`; http, https and mailto only; no arbitrary exec in v0 |
 | `tray` | `create({ icon, menu })`, `destroy()` | menu = typed item list |
 | `updater` | `check()`, `apply()` | Phase 2; present in types from day one |
 

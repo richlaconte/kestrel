@@ -2,13 +2,23 @@
 // The manifest's `permissions` array is the only source of authority: an
 // ungranted capability's host bindings are never installed in the engine.
 
-use std::path::{Component, Path, PathBuf};
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use crate::error::KestrelError;
 
 /// Every permission the host understands. Unknown names are a manifest
 /// error, not a silent no-op: a grant that does nothing would mislead.
-pub const KNOWN: &[&str] = &["fs:app-data", "fs:all"];
+pub const KNOWN: &[&str] = &[
+    "fs:app-data",
+    "fs:pick",
+    "fs:all",
+    "notifications",
+    "clipboard",
+    "shell:open",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FsScope {
@@ -17,9 +27,13 @@ pub enum FsScope {
     /// Any path the user can access. Relative paths still resolve in the
     /// app's data dir, never the process cwd.
     All,
+    /// Only what the user picked in a dialog (`fs:pick` without
+    /// `fs:app-data`).
+    Picked,
 }
 
 /// Reject unknown or duplicate permissions; return the fs scope granted.
+/// `fs:pick` alongside `fs:app-data` is a flag on the grant: see `Fs::pick`.
 pub fn parse(perms: &[String]) -> Result<Option<FsScope>, String> {
     let mut seen = Vec::new();
     for p in perms {
@@ -39,6 +53,8 @@ pub fn parse(perms: &[String]) -> Result<Option<FsScope>, String> {
         Some(FsScope::All)
     } else if has("fs:app-data") {
         Some(FsScope::AppData)
+    } else if has("fs:pick") {
+        Some(FsScope::Picked)
     } else {
         None
     })
@@ -82,11 +98,22 @@ pub fn webview_store_id(app_id: &str) -> [u8; 16] {
     id
 }
 
-/// A filesystem grant: a scope plus the app's (canonical) data dir.
+/// A filesystem grant: a scope plus the app's (canonical) data dir, and
+/// under `fs:pick` the paths the user has picked in dialogs this run.
+/// Clones share the picks, so the webview and native code see the same ones.
 #[derive(Clone, Debug)]
 pub struct Fs {
     pub scope: FsScope,
     pub root: PathBuf,
+    pick: bool,
+    picked: Arc<Mutex<Vec<Picked>>>,
+}
+
+/// A canonical path the user picked: a file, or a folder and all inside it.
+#[derive(Debug)]
+struct Picked {
+    path: PathBuf,
+    folder: bool,
 }
 
 impl Fs {
@@ -96,8 +123,44 @@ impl Fs {
     pub fn new(scope: FsScope, data_dir: &Path) -> Result<Fs, String> {
         std::fs::create_dir_all(data_dir)
             .and_then(|_| data_dir.canonicalize())
-            .map(|root| Fs { scope, root })
+            .map(|root| Fs {
+                pick: scope == FsScope::Picked,
+                scope,
+                root,
+                picked: Arc::default(),
+            })
             .map_err(|e| format!("cannot create app data dir {}: {e}", data_dir.display()))
+    }
+
+    /// Also allow what the user picks in dialogs (`fs:pick`).
+    pub fn with_pick(mut self, pick: bool) -> Fs {
+        self.pick |= pick;
+        self
+    }
+
+    /// Record a dialog pick (no-op without `fs:pick`). A save dialog's file
+    /// may not exist yet; its folder does.
+    pub fn record_pick(&self, path: &Path, folder: bool) {
+        if !self.pick {
+            return;
+        }
+        let canonical = path.canonicalize().ok().or_else(|| {
+            let parent = path.parent()?.canonicalize().ok()?;
+            Some(parent.join(path.file_name()?))
+        });
+        if let Some(path) = canonical {
+            self.picked.lock().unwrap().push(Picked { path, folder });
+        }
+    }
+
+    fn is_picked(&self, real: &Path) -> bool {
+        self.pick
+            && self
+                .picked
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|p| real == p.path || (p.folder && real.starts_with(&p.path)))
     }
 
     /// Map a path from native code to the real path it may touch.
@@ -147,6 +210,16 @@ impl Fs {
                 },
             }
         };
+        let full = tail.iter().rev().fold(real.clone(), |acc, n| acc.join(n));
+        if self.is_picked(&full) {
+            return Ok(full);
+        }
+        if self.scope == FsScope::Picked {
+            return Err(KestrelError::new(
+                "permission_denied",
+                format!("{p} was not picked in a dialog (fs:pick)"),
+            ));
+        }
         if !real.starts_with(&self.root) {
             return Err(KestrelError::new(
                 "permission_denied",
@@ -167,7 +240,7 @@ impl Fs {
                 ));
             }
         }
-        Ok(tail.iter().rev().fold(real, |acc, n| acc.join(n)))
+        Ok(full)
     }
 
     pub fn read(&self, p: &str) -> Result<String, KestrelError> {
@@ -186,9 +259,12 @@ impl Fs {
             std::fs::create_dir_all(parent).map_err(|e| io_err(p, e))?;
             // Creating the parents could have walked through a symlink
             // planted after `resolve`; check the result again.
-            if self.scope == FsScope::AppData {
+            if self.scope != FsScope::All {
                 let parent = parent.canonicalize().map_err(|e| io_err(p, e))?;
-                if !parent.starts_with(&self.root) {
+                let picked = real
+                    .file_name()
+                    .is_some_and(|n| self.is_picked(&parent.join(n)));
+                if !picked && !parent.starts_with(&self.root) {
                     return Err(KestrelError::new(
                         "permission_denied",
                         format!("{p} is outside the app data dir (fs:app-data)"),
@@ -238,6 +314,12 @@ mod tests {
     #[test]
     fn parse_grants_and_rejects() {
         assert_eq!(parse(&[]), Ok(None));
+        assert_eq!(parse(&perms(&["fs:pick"])), Ok(Some(FsScope::Picked)));
+        assert_eq!(
+            parse(&perms(&["fs:pick", "fs:app-data"])),
+            Ok(Some(FsScope::AppData))
+        );
+        assert_eq!(parse(&perms(&["clipboard", "notifications"])), Ok(None));
         assert_eq!(parse(&perms(&["fs:app-data"])), Ok(Some(FsScope::AppData)));
         assert_eq!(
             parse(&perms(&["fs:app-data", "fs:all"])),
@@ -348,5 +430,59 @@ mod tests {
         assert_eq!(fs.read(outside.to_str().unwrap()).unwrap(), "o");
         fs.write("rel.txt", "r").unwrap();
         assert!(fs.root.join("rel.txt").is_file());
+    }
+
+    #[test]
+    fn picks_open_exactly_the_picked_file_or_folder() {
+        let base = tmp("pick");
+        let outside = base.join("docs");
+        std::fs::create_dir_all(outside.join("sub")).unwrap();
+        std::fs::write(outside.join("a.txt"), "a").unwrap();
+        std::fs::write(outside.join("b.txt"), "b").unwrap();
+        let p = |f: &str| outside.join(f).to_string_lossy().into_owned();
+
+        // fs:pick alone: nothing until the user picks, then only that.
+        let fs = Fs::new(FsScope::Picked, &base.join("data")).unwrap();
+        assert_eq!(fs.read(&p("a.txt")).unwrap_err().code, "permission_denied");
+        assert_eq!(fs.read("x.txt").unwrap_err().code, "permission_denied");
+        fs.record_pick(&outside.join("a.txt"), false);
+        assert_eq!(fs.read(&p("a.txt")).unwrap(), "a");
+        fs.write(&p("a.txt"), "a2").unwrap();
+        assert_eq!(fs.read(&p("b.txt")).unwrap_err().code, "permission_denied");
+
+        // A save dialog's file doesn't exist yet.
+        fs.record_pick(&outside.join("new.txt"), false);
+        fs.write(&p("new.txt"), "n").unwrap();
+        assert_eq!(fs.read(&p("new.txt")).unwrap(), "n");
+
+        // A folder opens everything under it, and clones share picks.
+        let clone = fs.clone();
+        fs.record_pick(&outside.join("sub"), true);
+        clone.write(&p("sub/deep/c.txt"), "c").unwrap();
+        assert_eq!(fs.read(&p("sub/deep/c.txt")).unwrap(), "c");
+        assert_eq!(
+            fs.read(&p("sub/../b.txt")).unwrap_err().code,
+            "permission_denied"
+        );
+    }
+
+    #[test]
+    fn picks_are_ignored_without_fs_pick_and_add_to_app_data_with_it() {
+        let base = tmp("pick2");
+        let file = base.join("outside.txt");
+        std::fs::write(&file, "o").unwrap();
+        let shown = file.to_string_lossy().into_owned();
+
+        let plain = Fs::new(FsScope::AppData, &base.join("data")).unwrap();
+        plain.record_pick(&file, false);
+        assert_eq!(plain.read(&shown).unwrap_err().code, "permission_denied");
+
+        let both = Fs::new(FsScope::AppData, &base.join("data2"))
+            .unwrap()
+            .with_pick(true);
+        both.write("in.txt", "i").unwrap();
+        both.record_pick(&file, false);
+        assert_eq!(both.read(&shown).unwrap(), "o");
+        assert_eq!(both.read("in.txt").unwrap(), "i");
     }
 }

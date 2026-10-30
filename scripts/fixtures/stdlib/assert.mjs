@@ -12,6 +12,7 @@ assert.deepEqual(r.prefs, { theme: "dark", sizes: [1, 2] });
 assert.equal(r.deleteMissing, false);
 assert.deepEqual(r.keys.filter((k) => k !== "result"), ["prefs", "runs"]);
 assert.equal(r.setTitle, null);
+assert.deepEqual(r.badDialog, { error: "io", kestrelError: true }, "dialog options are validated");
 
 if (mode === "granted") {
   assert.equal(r.readText, "héllo");
@@ -20,8 +21,13 @@ if (mode === "granted") {
   assert.deepEqual(r.missing, { error: "not_found", kestrelError: true });
   assert.deepEqual(r.escape, denied);
   assert.deepEqual(r.storeFile, denied, "the store file is Kestrel's, not app data");
+  assert.equal(r.clipWrite, null);
+  assert.equal(r.clipRead, true, "clipboard round trip");
+  assert.deepEqual(r.openFile, { error: "io", kestrelError: true }, "file: links are refused");
+  assert.deepEqual(r.openJunk, { error: "io", kestrelError: true });
 } else {
-  for (const k of ["write", "readText", "readBytes", "exists", "missing", "escape", "storeFile"])
+  for (const k of ["write", "readText", "readBytes", "exists", "missing", "escape", "storeFile",
+                   "clipWrite", "clipRead", "openFile", "openJunk", "notify"])
     assert.deepEqual(r[k], denied, `${k} without an fs grant`);
 }
 console.log(`OK (${mode}, run ${run}): ${JSON.stringify(r)}`);

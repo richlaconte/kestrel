@@ -347,10 +347,14 @@ pub fn is_app_url(url: &tauri::Url) -> bool {
     }
 }
 
-/// Hand a web or mail link to the system's default handler.
-pub fn open_external(url: &tauri::Url) {
+/// Hand a web or mail link to the system's default handler. Anything else
+/// (file:, custom schemes) is refused: opening those can run programs.
+pub fn open_external(url: &tauri::Url) -> Result<(), String> {
     if !matches!(url.scheme(), "http" | "https" | "mailto") {
-        return;
+        return Err(format!(
+            "only http, https and mailto links can be opened (got {}:)",
+            url.scheme()
+        ));
     }
     let u = url.as_str();
     #[cfg(target_os = "macos")]
@@ -361,9 +365,7 @@ pub fn open_external(url: &tauri::Url) {
         .spawn();
     #[cfg(all(unix, not(target_os = "macos")))]
     let cmd = std::process::Command::new("xdg-open").arg(u).spawn();
-    if let Err(e) = cmd {
-        eprintln!("kestrel-host: cannot open {u}: {e}");
-    }
+    cmd.map(|_| ()).map_err(|e| format!("cannot open {u}: {e}"))
 }
 
 #[cfg(test)]
