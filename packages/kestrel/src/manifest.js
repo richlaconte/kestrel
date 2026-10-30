@@ -5,7 +5,7 @@ export const WINDOW_FIELDS = [
   "resizable", "minWidth", "minHeight", "maxWidth", "maxHeight",
   "center", "decorations", "titleBarStyle", "rememberWindow",
 ];
-const FIELDS = ["$schema", "appId", "title", "version", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions"];
+const FIELDS = ["$schema", "appId", "title", "version", "bundleId", "icon", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions"];
 const TITLE_BAR_STYLES = ["visible", "transparent", "overlay"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
@@ -27,6 +27,10 @@ export function validateManifest(m) {
     errs.push(`\`appId\` must be lowercase letters, digits, dots and dashes (got ${JSON.stringify(m.appId)})`);
   if (m.title !== undefined && (typeof m.title !== "string" || !m.title))
     errs.push("`title` must be a non-empty string");
+  if (m.bundleId !== undefined && (typeof m.bundleId !== "string" || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(m.bundleId)))
+    errs.push(`\`bundleId\` must be reverse-DNS, like "com.example.my-app" (got ${JSON.stringify(m.bundleId)})`);
+  if (m.icon !== undefined && (typeof m.icon !== "string" || !/\.png$/i.test(m.icon)))
+    errs.push('`icon` must be a path to a square PNG, ideally 1024×1024 (e.g. "icon.png")');
   if (m.version !== undefined && (typeof m.version !== "string" || !m.version))
     errs.push('`version` must be a non-empty string, e.g. "1.0.0"');
   for (const k of ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight"])

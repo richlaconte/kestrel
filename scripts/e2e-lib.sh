@@ -10,3 +10,13 @@ rm_tree() {
   done
   echo "note: could not remove $1 (still locked)" >&2
 }
+
+# The executable `kestrel build` made for <appId>, run from the app dir:
+# inside build/<Title>.app on macOS, build/<appId>/ elsewhere.
+built_exe() {
+  if [ "$(uname)" = Darwin ]; then
+    echo "$PWD/$(ls -d build/*.app)/Contents/MacOS/$1"
+  else
+    echo "$PWD/build/$1/$1"
+  fi
+}

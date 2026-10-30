@@ -25,6 +25,6 @@ echo "== dev =="
 $KESTREL dev . --exit-after=15000
 echo "== build =="
 $KESTREL build .
-KESTREL_EXIT_AFTER_MS=12000 "./build/kestrel-serve-fixture/kestrel-serve-fixture"
+KESTREL_EXIT_AFTER_MS=12000 "$(built_exe kestrel-serve-fixture)"
 
 node "$REPO_ROOT/scripts/fixtures/serve/assert.mjs" .

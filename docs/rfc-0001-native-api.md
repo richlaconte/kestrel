@@ -163,5 +163,8 @@ docs list every code per call. (Friction item K3: raw Rust panics are not an err
    **Decided (#18):** one JSON file, `<app data dir>/.kestrel/store.json`, written through
    on every change (temp file, fsync, rename), so a resolved `set` survives a crash.
    SQLite can be a later, opt-in module.
-4. Per-app icon pipeline: one source PNG in the app dir, CLI derives all platform sizes
-   at build time — any reason not to?
+4. ~~Per-app icon pipeline: one source PNG in the app dir, CLI derives all platform sizes
+   at build time — any reason not to?~~ **Decided (#27):** yes. `icon` in the manifest
+   names a square PNG (at least 512 px, 1024 best); `kestrel build` writes `.icns`, `.ico`
+   and the PNG sizes to `build/icons/` with no native tools or dependencies. Without one,
+   apps get the Kestrel icon.
