@@ -13,6 +13,7 @@ serde_json = "1"
 rquickjs = "0.6"
 minreq = "2"
 percent-encoding = "2"
+dirs = "6"
 
 [profile.release]
 opt-level = "s"

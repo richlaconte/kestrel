@@ -7,10 +7,17 @@ assert.deepEqual(r.sync, { ok: true, value: 42 });
 assert.deepEqual(r.asyncValue, { ok: true, value: { doubled: 42 } }); // #2
 assert.deepEqual(r.asyncChain, { ok: true, value: 3 });
 assert.deepEqual(r.asyncUndefined, { ok: true, value: null });
-assert.deepEqual(r.rejects, { ok: false, error: "nope" });
-assert.deepEqual(r.throws, { ok: false, error: "sync nope" });
+// #19: every failure is a structured KestrelError payload.
+const fn = (name) => ({ function: name });
+assert.deepEqual(r.rejects, { ok: false, code: "native_function", error: "nope", detail: fn("rejects") });
+assert.deepEqual(r.throws, { ok: false, code: "native_function", error: "sync nope", detail: fn("throws") });
+assert.equal(r.neverSettles.code, "native_function");
 assert.match(r.neverSettles.error, /never settled/);
-assert.match(r.missing.error, /no native function: missing/);
+assert.deepEqual(r.missing, { ok: false, code: "not_found", error: "no native function: missing", detail: fn("missing") });
+assert.equal(r.readMissing.code, "not_found");
+assert.match(r.readMissing.error, /^does-not-exist\.txt: /);
+assert.equal(r.escape.code, "permission_denied");
+assert.deepEqual(r.cancels, { ok: false, code: "cancelled", error: "user cancelled", detail: fn("cancels") });
 assert.deepEqual(r.spin, { ok: true, value: "spun" });
 // #5: a 2 s native call must not freeze the page. A blocked main thread
 // paints ~0 frames; leave generous headroom for slow CI runners.
@@ -19,5 +26,6 @@ assert.ok(r.spinFrames >= 20, `page painted only ${r.spinFrames} frames during a
 assert.equal(r.evalBlocked, true, "default CSP must block eval");
 assert.equal(r.popup, "denied");
 assert.match(r.stillHere, /^(kestrel|http):$/, "window must stay on the app origin");
+console.log("OK: errors arrive as KestrelError payloads with the right codes");
 console.log("OK: CSP blocks eval; popups and navigation away are refused");
 console.log(`OK: IPC contract holds (${r.spinFrames} frames painted during a 2 s native call)`);

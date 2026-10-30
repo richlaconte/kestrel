@@ -5,5 +5,8 @@
   "width": 720,
   "height": 520,
   "frontend": ".",
-  "native": "native.js"
+  "native": "native.js",
+  "permissions": [
+    "fs:app-data"
+  ]
 }

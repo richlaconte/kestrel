@@ -86,3 +86,12 @@ test("typegen warns about non-function exports", () => {
   assert.match(res.stderr, /exports `V`, which isn't a function/);
   assert.match(res.stdout, /1 fn\(s\): f/);
 });
+
+test("fs:all prints a loud warning; fs:app-data does not", () => {
+  for (const [perm, warns] of [["fs:all", true], ["fs:app-data", false]]) {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", permissions: [perm] }));
+    const res = run(["typegen", dir]);
+    assert.equal(/`fs:all` lets native code read and write every file/.test(res.stderr), warns, perm);
+  }
+});

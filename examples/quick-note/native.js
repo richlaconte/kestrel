@@ -1,12 +1,10 @@
-// Quick Note's entire "backend": two native functions.
-const NOTE_PATH = "/tmp/quick-note.txt";
+// Quick Note's entire "backend": two native functions. The note lives in the
+// app's data directory ("fs:app-data" in kestrel.json).
+const NOTE = "note.txt";
 
-native.loadNote = () => {
-  const raw = hostReadFile(NOTE_PATH);
-  return raw.startsWith("ERR:") ? "" : raw;
-};
+native.loadNote = () => (hostExists(NOTE) ? hostReadFile(NOTE) : "");
 
 native.saveNote = ({ text }) => {
-  const res = hostWriteFile(NOTE_PATH, text);
-  return res === "ok" ? `saved ${text.length} chars to ${NOTE_PATH}` : res;
+  hostWriteFile(NOTE, text);
+  return `saved ${text.length} chars to ${hostAppDataDir()}`;
 };

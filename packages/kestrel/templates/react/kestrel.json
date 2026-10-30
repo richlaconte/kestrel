@@ -8,5 +8,8 @@
     "dev": "vite",
     "dist": "dist"
   },
-  "native": "native.ts"
+  "native": "native.ts",
+  "permissions": [
+    "fs:app-data"
+  ]
 }

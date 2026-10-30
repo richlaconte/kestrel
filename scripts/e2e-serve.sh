@@ -3,15 +3,20 @@
 # static server (MIME types, SPA fallback), in the real host.
 # Usage: e2e-serve.sh   (run under xvfb-run in CI)
 set -euo pipefail
+. "$(dirname "$0")/e2e-lib.sh"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then REPO_ROOT="$(cygpath -m "$REPO_ROOT")"; fi
 KESTREL="node $REPO_ROOT/packages/kestrel/bin/kestrel.js"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rc=$?; rm_tree "$WORK"; exit $rc' EXIT
 cp -R "$REPO_ROOT/scripts/fixtures/serve/." "$WORK"
 cd "$WORK"
 rm -f assert.mjs
+# The fixture reports through fs:app-data; point the app's data dir here.
+KESTREL_DATA_DIR="$WORK"
+command -v cygpath >/dev/null 2>&1 && KESTREL_DATA_DIR="$(cygpath -m "$WORK")"
+export KESTREL_DATA_DIR
 
 npm pkg set "devDependencies.kestreljs=file:$REPO_ROOT/packages/kestrel"
 npm install --no-audit --no-fund --loglevel=error

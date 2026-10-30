@@ -4,7 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { runTypegen, TypegenError } from "../src/typegen.js";
+import { fileURLToPath } from "node:url";
+import { ERROR_CODES, runTypegen, TypegenError } from "../src/typegen.js";
+import { KestrelError as RuntimeKestrelError } from "../../kestrel-native/index.js";
 
 const ts = createRequire(import.meta.url)("typescript");
 
@@ -182,4 +184,69 @@ test("syntax errors in native.ts are reported with native.ts line and column", (
     () => gen("export function ok(): number { return 1; }\nexport function bad( { \n"),
     (e) => e instanceof TypegenError && /native\.ts:\d+:\d+: /.test(e.message),
   );
+});
+
+/** Import a generated client with a fake Tauri `invoke` behind it. */
+async function loadClient(file, invokeImpl) {
+  let src = fs.readFileSync(file, "utf8");
+  if (file.endsWith(".ts"))
+    src = ts.transpileModule(src, {
+      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
+    }).outputText.replace(/^import type .*$/m, "");
+  globalThis.window = { __TAURI__: { core: { invoke: invokeImpl } } };
+  return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
+}
+
+const hostError = { code: "permission_denied", message: "../x is outside", detail: { function: "f" } };
+const fakeHost = async (_cmd, { name }) => {
+  if (name === "ok") return 42;
+  if (name === "denied") throw hostError;
+  throw "command call_native not allowed"; // Tauri-level failures are bare strings
+};
+
+async function assertKestrelErrors(client) {
+  assert.equal(await client.ok(), 42);
+  const e = await client.denied().catch((x) => x);
+  assert.ok(e instanceof client.KestrelError);
+  assert.ok(e instanceof RuntimeKestrelError, "one app, one KestrelError: kestrel-native's instanceof must pass");
+  assert.ok(e instanceof Error);
+  assert.deepEqual([e.name, e.code, e.message, e.detail], ["KestrelError", ...Object.values(hostError)]);
+  const wrapped = await client.other().catch((x) => x);
+  assert.ok(wrapped instanceof client.KestrelError);
+  assert.equal(wrapped.code, "native_function");
+  assert.equal(wrapped.message, "command call_native not allowed");
+  // Plain errors are not KestrelErrors.
+  assert.ok(!(new Error("x") instanceof client.KestrelError));
+  assert.ok(new RuntimeKestrelError("io", "x") instanceof client.KestrelError);
+}
+
+test("TS client rejects with an exported KestrelError (#19)", async () => {
+  const { dir } = gen("export const ok = () => 1;\nexport const denied = () => 1;\nexport const other = () => 1;\n");
+  assertCompiles(dir);
+  await assertKestrelErrors(await loadClient(path.join(dir, "native-client.ts"), fakeHost));
+});
+
+test("JS client rejects with an exported KestrelError (#19)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
+  fs.writeFileSync(path.join(dir, "native.js"), "native.ok = () => 1;\nnative.denied = () => 1;\nnative.other = () => 1;\n");
+  runTypegen(dir, { native: "native.js" });
+  await assertKestrelErrors(await loadClient(path.join(dir, "native-client.js"), fakeHost));
+});
+
+test("KestrelError and KestrelErrorCode are reserved export names", () => {
+  assert.throws(() => gen("export function KestrelError() {}\n"), /`KestrelError` is reserved/);
+  assert.throws(() => gen("export interface KestrelErrorCode { a: 1 }\nexport const f = (x: KestrelErrorCode) => 1;\n"), /`KestrelErrorCode` is reserved/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
+  fs.writeFileSync(path.join(dir, "native.js"), "native.KestrelError = () => 1;\n");
+  assert.throws(() => runTypegen(dir, { native: "native.js" }), /`native.KestrelError` is reserved/);
+});
+
+test("host, typegen and kestrel-native agree on the error codes", () => {
+  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const rs = fs.readFileSync(path.join(repo, "host", "src", "error.rs"), "utf8");
+  const host = rs.match(/pub const CODES: &\[&str\] = &\[([^\]]*)\]/)[1];
+  assert.deepEqual([...host.matchAll(/"([^"]+)"/g)].map((x) => x[1]), ERROR_CODES);
+  const dts = fs.readFileSync(path.join(repo, "packages", "kestrel-native", "index.d.ts"), "utf8");
+  const union = dts.match(/export type KestrelErrorCode =([^;]*);/)[1];
+  assert.deepEqual([...union.matchAll(/"([^"]+)"/g)].map((x) => x[1]), ERROR_CODES);
 });

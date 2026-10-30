@@ -39,6 +39,11 @@ function readManifest(dir) {
   if (errs.length) die(`problems in ${p}:\n${errs.map((e) => `  - ${e}`).join("\n")}`);
   if (m.native && !fs.existsSync(path.resolve(dir, m.native)))
     die(`\`native\` points at ${m.native}, which doesn't exist (in ${dir})`);
+  if (m.permissions?.includes("fs:all"))
+    console.warn(
+      "\x1b[33mkestrel: warning:\x1b[0m `fs:all` lets native code read and write every file the user can. " +
+        'Use "fs:app-data" unless the app really needs that.',
+    );
   return m;
 }
 
@@ -183,6 +188,7 @@ async function dev(dir = ".") {
     width: m.width,
     height: m.height,
     frontend: dir, // used only in static mode; host requires it either way
+    permissions: m.permissions ?? [],
   };
   if (compiled) runtime.native = path.resolve(compiled);
   const exitAfter = flag("exit-after");
@@ -282,6 +288,7 @@ async function build(dir = ".") {
     width: m.width,
     height: m.height,
     frontend: "app",
+    permissions: m.permissions ?? [],
   };
   if (m.csp !== undefined) runtime.csp = m.csp;
   if (compiled) {

@@ -460,10 +460,12 @@ footer a:hover { color: var(--text); }
 }
 
 <span class="k">export function</span> <span class="f">visitCount</span>(): <span class="t">number</span> {
-  <span class="k">const</span> raw = <span class="f">hostReadFile</span>(<span class="s">"./kestrel-data.json"</span>);
-  <span class="k">const</span> data = raw.<span class="f">startsWith</span>(<span class="s">"ERR:"</span>) ? { visits: <span class="t">0</span> } : <span class="t">JSON</span>.<span class="f">parse</span>(raw);
+  <span class="c">// "fs:app-data" in kestrel.json: this file lives in the app's data dir.</span>
+  <span class="k">const</span> data = <span class="f">hostExists</span>(<span class="s">"visits.json"</span>)
+    ? <span class="t">JSON</span>.<span class="f">parse</span>(<span class="f">hostReadFile</span>(<span class="s">"visits.json"</span>))
+    : { visits: <span class="t">0</span> };
   data.visits += <span class="t">1</span>;
-  <span class="f">hostWriteFile</span>(<span class="s">"./kestrel-data.json"</span>, <span class="t">JSON</span>.<span class="f">stringify</span>(data));
+  <span class="f">hostWriteFile</span>(<span class="s">"visits.json"</span>, <span class="t">JSON</span>.<span class="f">stringify</span>(data));
   <span class="k">return</span> data.visits;
 }</code></pre>
 <pre class="pane" id="p-app" hidden><code><span class="k">import</span> { useState } <span class="k">from</span> <span class="s">"react"</span>;
@@ -658,7 +660,7 @@ member named 'greet'. Did you mean 'welcome'?</code></pre>
           <h3>Native code with least privilege built in.</h3>
           <p>Native functions run in an embedded QuickJS engine <strong>inside the host process</strong>. It adds only 0.8 MB and needs no Node sidecar. There is no ambient <code>fetch</code>, <code>require</code> or <code>child_process</code>: your code can only call the bindings the host exposes, and the webview can't touch the system at all.</p>
           <ul class="checks">
-            <li>Next on the roadmap: manifest-declared permissions that scope each binding (<a href="https://github.com/richlaconte/kestrel/blob/main/docs/rfc-0001-native-api.md">RFC-0001 §6</a>).</li>
+            <li>Bindings exist only if <code>kestrel.json</code> grants them. With <code>"fs:app-data"</code>, file access is confined to the app's own data directory: <code>..</code> and symlink escapes are refused (<a href="https://github.com/richlaconte/kestrel/blob/main/docs/rfc-0001-native-api.md">RFC-0001 §6</a>).</li>
             <li>Heavy compute can move to Rust plugins or WASM later behind the same protocol.</li>
           </ul>
         </div>
