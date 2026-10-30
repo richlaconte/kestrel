@@ -34,17 +34,27 @@ function readManifest(dir) {
   }
 }
 
+// Prebuilt host from the platform package npm installed alongside kestreljs
+// (an optionalDependency; see scripts/release). Falls back to a local cargo
+// build for framework development.
 function resolveHost() {
+  const exe = process.platform === "win32" ? "kestrel-host.exe" : "kestrel-host";
+  const platformPkg = `kestreljs-host-${process.platform}-${process.arch}`;
+  let prebuilt = null;
+  try {
+    prebuilt = createRequire(import.meta.url).resolve(`${platformPkg}/bin/${exe}`);
+  } catch {}
   const candidates = [
     process.env.KESTREL_HOST,
-    path.join(REPO_ROOT, "host", "target", "release", "kestrel-host"),
-    path.join(REPO_ROOT, "host", "target", "release", "kestrel-host.exe"),
+    prebuilt,
+    path.join(REPO_ROOT, "host", "target", "release", exe),
   ].filter(Boolean);
   for (const c of candidates) if (fs.existsSync(c)) return c;
   die(
-    "host binary not found. Build it once with `npm run build:host` " +
-      "(needs Rust), or set KESTREL_HOST to a prebuilt binary.\n" +
-      "  (In the released framework this is downloaded automatically — you never compile it.)",
+    `no host binary for ${process.platform}-${process.arch}. ` +
+      `It ships as the optional dependency ${platformPkg}: reinstall without ` +
+      "--no-optional/--omit=optional, or set KESTREL_HOST to a host binary. " +
+      "Developing Kestrel itself? Build one with `npm run build:host` (needs Rust).",
   );
 }
 

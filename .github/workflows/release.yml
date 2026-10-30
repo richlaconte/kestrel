@@ -1,0 +1,126 @@
+name: release
+
+# Push a tag like v0.2.0 after committing `node scripts/release/set-version.mjs 0.2.0`.
+# Needs the NPM_TOKEN secret (an npm automation token). See docs/RELEASING.md.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and stage everything, publish nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # GitHub Release
+  id-token: write # npm provenance
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      version: ${{ steps.m.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - id: m
+        run: |
+          node --input-type=module -e '
+            import { TARGETS } from "./scripts/release/targets.mjs";
+            console.log("matrix=" + JSON.stringify({ include: TARGETS }));
+          ' >> "$GITHUB_OUTPUT"
+          v=$(node -p 'require("./packages/kestrel/package.json").version')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package version $v (run scripts/release/set-version.mjs)"
+            exit 1
+          fi
+
+  host:
+    needs: plan
+    name: host (${{ matrix.os }}-${{ matrix.cpu }})
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux system deps (webkit2gtk)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: host
+          key: ${{ matrix.rust }}
+      - name: Build host
+        working-directory: host
+        run: cargo build --release --target ${{ matrix.rust }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-${{ matrix.os }}-${{ matrix.cpu }}
+          path: host/target/${{ matrix.rust }}/release/${{ matrix.exe }}
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, host]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Stage host packages and release assets
+        run: |
+          mkdir -p staged assets
+          for d in artifacts/host-*; do
+            key=${d#artifacts/host-}
+            bin=$(ls "$d"/kestrel-host*)
+            node scripts/release/host-package.mjs "$key" "$bin" staged
+            case "$bin" in
+              *.exe) cp "$bin" "assets/kestrel-host-$key.exe" ;;
+              *)     cp "$bin" "assets/kestrel-host-$key" ;;
+            esac
+          done
+          ls -R staged assets
+      - name: Verify kestreljs pins every host package
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import { TARGETS, pkgName } from "./scripts/release/targets.mjs";
+            const pkg = JSON.parse(fs.readFileSync("packages/kestrel/package.json", "utf8"));
+            for (const t of TARGETS) {
+              const want = pkgName(t), got = pkg.optionalDependencies?.[want];
+              if (got !== pkg.version) throw new Error(`kestreljs optionalDependencies.${want} is ${got}, expected ${pkg.version}`);
+              if (!fs.existsSync(`staged/${want}/package.json`)) throw new Error(`no staged build for ${want}`);
+            }
+          '
+      - name: Publish to npm
+        if: github.ref_type == 'tag' || !inputs.dry_run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Hosts first, so kestreljs's optionalDependencies resolve the moment it lands.
+          node scripts/release/publish.mjs staged/* \
+            packages/kestrel-native packages/kestrel packages/create-kestrel-app
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --prerelease
+          gh release upload "$GITHUB_REF_NAME" assets/* --clobber
