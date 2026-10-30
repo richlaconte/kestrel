@@ -4,5 +4,8 @@
   "width": 640,
   "height": 480,
   "frontend": ".",
-  "native": "native.js"
+  "native": "native.js",
+  "permissions": [
+    "fs:app-data"
+  ]
 }

@@ -67,6 +67,23 @@
     "csp": {
       "description": "Content-Security-Policy for the built app (never applied in dev). Omit for Kestrel's default: scripts only from the app, no eval. An empty string turns it off.",
       "type": "string"
+    },
+    "permissions": {
+      "description": "Capabilities granted to native code. Omit or leave empty for none: native functions then get no filesystem access at all.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {
+            "const": "fs:app-data",
+            "description": "Read and write files inside the app's data directory. Relative paths resolve there."
+          },
+          {
+            "const": "fs:all",
+            "description": "Read and write any file the user can. Relative paths still resolve in the app's data directory. Prefer fs:app-data."
+          }
+        ]
+      }
     }
   },
   "additionalProperties": false

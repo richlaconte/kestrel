@@ -24,6 +24,6 @@ native.spin = ({ ms }) => {
   return "spun";
 };
 native.report = (results) => {
-  hostWriteFile("./ipc-results.json", JSON.stringify(results, null, 2));
+  hostWriteFile("ipc-results.json", JSON.stringify(results, null, 2));
   return true;
 };

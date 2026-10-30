@@ -12,6 +12,10 @@ trap 'rm -rf "$WORK"' EXIT
 cp -R "$REPO_ROOT/scripts/fixtures/serve/." "$WORK"
 cd "$WORK"
 rm -f assert.mjs
+# The fixture reports through fs:app-data; point the app's data dir here.
+KESTREL_DATA_DIR="$WORK"
+command -v cygpath >/dev/null 2>&1 && KESTREL_DATA_DIR="$(cygpath -m "$WORK")"
+export KESTREL_DATA_DIR
 
 npm pkg set "devDependencies.kestreljs=file:$REPO_ROOT/packages/kestrel"
 npm install --no-audit --no-fund --loglevel=error

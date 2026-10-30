@@ -1,6 +1,9 @@
 // kestrel.json validation. Mirrors schema/kestrel.schema.json (published for
 // editor autocomplete), with messages that name the field and the fix.
-const FIELDS = ["$schema", "appId", "title", "width", "height", "frontend", "native", "csp"];
+const FIELDS = ["$schema", "appId", "title", "width", "height", "frontend", "native", "csp", "permissions"];
+
+/** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
+export const PERMISSIONS = ["fs:app-data", "fs:all"];
 
 /** Return a list of human-readable problems; empty means valid. */
 export function validateManifest(m) {
@@ -38,6 +41,17 @@ export function validateManifest(m) {
 
   if (m.csp !== undefined && typeof m.csp !== "string")
     errs.push('`csp` must be a Content-Security-Policy string ("" turns it off)');
+
+  const p = m.permissions;
+  if (p !== undefined) {
+    if (!Array.isArray(p)) errs.push('`permissions` must be an array, e.g. ["fs:app-data"]');
+    else
+      p.forEach((x, i) => {
+        if (!PERMISSIONS.includes(x))
+          errs.push(`\`permissions\` has unknown ${JSON.stringify(x)} (available: ${PERMISSIONS.join(", ")})`);
+        else if (p.indexOf(x) !== i) errs.push(`\`permissions\` lists ${JSON.stringify(x)} twice`);
+      });
+  }
 
   for (const k of Object.keys(m))
     if (!FIELDS.includes(k)) errs.push(`\`${k}\` is not a known field`);

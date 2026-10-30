@@ -40,10 +40,10 @@ kestrel.json         ─┘        (typegen, dev, build)
 
 Privileged code ("native functions" — the desktop analogue of server actions) is
 TypeScript running in a QuickJS engine **inside the host process**: +0.8 MB, ~0.8 ms
-round-trips, and it can only touch the bindings the host grants. Those bindings are not
-yet scoped by manifest permissions: today native code can read and write any file the
-user can. Capability scoping ([#14](https://github.com/richlaconte/kestrel/issues/14)) is
-the headline item for v0.3. The `kestrel typegen` command generates fully typed client stubs from your
+round-trips, and it can only touch the bindings the manifest grants. With no
+`permissions`, native code gets no filesystem bindings at all. `"fs:app-data"` confines
+it to the app's own data directory, and `"fs:all"` (which the CLI warns about) opens
+every file the user can reach. The `kestrel typegen` command generates fully typed client stubs from your
 native module, so IPC is a typed function call, never a magic string.
 
 ## Status: pre-alpha, architecture proven, API unstable
@@ -54,8 +54,14 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   recompiles
 - The frontend is served over a `kestrel://` protocol: full MIME types, client-side
   routes survive a reload, and built apps get a default Content-Security-Policy
-- Native functions run in embedded QuickJS with host bindings (fs). Sync and `async`
-  functions both work, calls never block the UI thread, and errors carry the JS message
+- Native functions run in embedded QuickJS. Sync and `async` functions both work,
+  calls never block the UI thread, and errors carry the JS message
+- **Manifest permissions scope native code.** `"permissions": ["fs:app-data"]` installs
+  `hostReadFile`, `hostWriteFile`, `hostExists` and `hostAppDataDir`. Relative paths
+  resolve in the per-app data directory (`~/Library/Application Support/<appId>`,
+  `%APPDATA%\<appId>`, `$XDG_DATA_HOME/<appId>`), never the process cwd. Paths
+  outside it, `..` and symlink escapes throw `permission_denied`. An ungranted binding
+  simply doesn't exist
 - **The React + Vite template has real HMR in the native window.** In dev, the
   `kestrel://` protocol reverse-proxies to Vite (methods, headers and bodies), so the
   window origin and the IPC policy are the same in dev and prod. Only the app's own
@@ -70,7 +76,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   from any directory
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-manifest permissions and scoped bindings, per-app data directories, the full
+webview storage isolated per app, permissions beyond the filesystem, the full
 `kestrel/native` std-lib, and signed installers with auto-update on top of `build`. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the

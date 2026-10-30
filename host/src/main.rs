@@ -11,6 +11,7 @@ use std::{
     sync::Mutex,
 };
 
+mod scope;
 mod serve;
 
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,10 @@ struct Manifest {
     /// default policy. Empty string: none. Never applied in dev.
     #[serde(default)]
     csp: Option<String>,
+    /// Capabilities granted to native code (RFC-0001 §6). Empty: no host
+    /// bindings beyond logging, a pure sandboxed webview.
+    #[serde(default)]
+    permissions: Vec<String>,
     /// Headless-run safety net: exit after N ms so CI runs always terminate.
     #[serde(default)]
     exit_after_ms: Option<u64>,
@@ -65,8 +70,11 @@ struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<NativeCall>>>);
 
 // Engine: rquickjs (QuickJS with first-class MSVC support — the earlier
 // quick-js crate could not build on Windows, which blocked the CI matrix).
-fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCall> {
-    use rquickjs::{function::Func, Context, Function, Runtime};
+fn start_native_engine(
+    script_path: PathBuf,
+    fs: Option<scope::Fs>,
+) -> std::sync::mpsc::Sender<NativeCall> {
+    use rquickjs::{function::Func, Context, Ctx, Exception, Function, Runtime};
 
     let (tx, rx) = std::sync::mpsc::channel::<NativeCall>();
     std::thread::spawn(move || {
@@ -76,25 +84,42 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
         let load_error: Option<String> = context.with(|ctx| {
             let globals = ctx.globals();
             // Host bindings: the privileged surface native functions may touch.
-            globals
-                .set(
-                    "hostReadFile",
-                    Func::from(|path: String| -> String {
-                        std::fs::read_to_string(&path).unwrap_or_else(|e| format!("ERR: {e}"))
-                    }),
-                )
-                .expect("bind hostReadFile");
-            globals
-                .set(
-                    "hostWriteFile",
-                    Func::from(|path: String, contents: String| -> String {
-                        match std::fs::write(&path, contents) {
-                            Ok(_) => "ok".to_string(),
-                            Err(e) => format!("ERR: {e}"),
-                        }
-                    }),
-                )
-                .expect("bind hostWriteFile");
+            // Only what the manifest grants is installed; an ungranted
+            // binding is absent, not a stub that refuses.
+            if let Some(fs) = fs {
+                let throw = |ctx: &Ctx<'_>, msg: String| Exception::throw_message(ctx, &msg);
+                let f = fs.clone();
+                globals
+                    .set(
+                        "hostReadFile",
+                        Func::from(move |ctx: Ctx<'_>, path: String| {
+                            f.read(&path).map_err(|e| throw(&ctx, e))
+                        }),
+                    )
+                    .expect("bind hostReadFile");
+                let f = fs.clone();
+                globals
+                    .set(
+                        "hostWriteFile",
+                        Func::from(move |ctx: Ctx<'_>, path: String, contents: String| {
+                            f.write(&path, &contents).map_err(|e| throw(&ctx, e))
+                        }),
+                    )
+                    .expect("bind hostWriteFile");
+                let f = fs.clone();
+                globals
+                    .set(
+                        "hostExists",
+                        Func::from(move |ctx: Ctx<'_>, path: String| {
+                            f.exists(&path).map_err(|e| throw(&ctx, e))
+                        }),
+                    )
+                    .expect("bind hostExists");
+                let root = fs.root.to_string_lossy().into_owned();
+                globals
+                    .set("hostAppDataDir", Func::from(move || root.clone()))
+                    .expect("bind hostAppDataDir");
+            }
             globals
                 .set(
                     "hostLog",
@@ -257,6 +282,7 @@ async fn call_native(
 struct Prepared {
     manifest: Manifest,
     frontend_dir: PathBuf,
+    fs_scope: Option<scope::FsScope>,
 }
 
 /// Load and validate the manifest. Errors are single-line and name the file
@@ -271,6 +297,20 @@ fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
     })?;
     let mut manifest: Manifest =
         serde_json::from_str(&raw).map_err(|e| format!("invalid manifest {shown}: {e}"))?;
+
+    // The app id names the data dir, so it must be a plain path segment.
+    let id_ok = manifest.app_id.bytes().enumerate().all(|(i, b)| {
+        b.is_ascii_lowercase() || b.is_ascii_digit() || (i > 0 && b"-.".contains(&b))
+    });
+    if manifest.app_id.is_empty() || !id_ok {
+        return Err(format!(
+            "invalid manifest {shown}: `appId` must be lowercase letters, digits, dots \
+             and dashes (got {:?})",
+            manifest.app_id
+        ));
+    }
+    let fs_scope = scope::parse(&manifest.permissions)
+        .map_err(|e| format!("invalid manifest {shown}: {e}. Check the `permissions` field."))?;
 
     // Relative paths in the manifest resolve against the manifest's own
     // directory, never the process cwd.
@@ -306,6 +346,7 @@ fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
     Ok(Prepared {
         manifest,
         frontend_dir,
+        fs_scope,
     })
 }
 
@@ -319,12 +360,19 @@ fn main() {
             .and_then(|exe| exe.parent().map(|d| d.join("kestrel.json")))
             .unwrap_or_else(|| PathBuf::from("kestrel.json")),
     };
+    let fail = |e: String| -> ! {
+        eprintln!("kestrel-host: error: {e}");
+        std::process::exit(1);
+    };
     let Prepared {
         mut manifest,
         frontend_dir,
-    } = prepare(&manifest_path).unwrap_or_else(|e| {
-        eprintln!("kestrel-host: error: {e}");
-        std::process::exit(1);
+        fs_scope,
+    } = prepare(&manifest_path).unwrap_or_else(|e| fail(e));
+    let fs = fs_scope.map(|s| {
+        scope::app_data_dir(&manifest.app_id)
+            .and_then(|d| scope::Fs::new(s, &d))
+            .unwrap_or_else(|e| fail(e))
     });
 
     // Test hook for headless CI runs of built bundles.
@@ -344,7 +392,7 @@ fn main() {
         manifest
             .native
             .as_ref()
-            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p)))),
+            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs))),
     );
 
     let window_cfg = manifest.clone();
@@ -409,6 +457,13 @@ mod tests {
 
     /// Start an engine on `src` and return a caller: name + args JSON → result.
     fn engine(src: &str) -> impl Fn(&str, &str) -> Result<String, String> {
+        engine_with(src, None)
+    }
+
+    fn engine_with(
+        src: &str,
+        fs: Option<scope::Fs>,
+    ) -> impl Fn(&str, &str) -> Result<String, String> {
         let dir = std::env::temp_dir().join(format!(
             "kestrel-engine-test-{}-{}",
             std::process::id(),
@@ -420,7 +475,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let script = dir.join("native.js");
         fs::write(&script, src).unwrap();
-        let tx = start_native_engine(script);
+        let tx = start_native_engine(script, fs);
         move |name, args| {
             let (rtx, rrx) = std::sync::mpsc::channel();
             tx.send((name.into(), args.into(), rtx)).unwrap();
@@ -550,6 +605,76 @@ mod tests {
             e.contains("native module `native.js`") && e.contains("`native` field"),
             "{e}"
         );
+    }
+
+    #[test]
+    fn ungranted_fs_bindings_are_absent() {
+        let call = engine(
+            "native.kinds = () => [typeof hostReadFile, typeof hostWriteFile, \
+             typeof hostExists, typeof hostAppDataDir, typeof hostLog];",
+        );
+        assert_eq!(
+            call("kinds", "{}"),
+            Ok(r#"["undefined","undefined","undefined","undefined","function"]"#.into())
+        );
+    }
+
+    #[test]
+    fn granted_fs_bindings_are_scoped_and_throw() {
+        let data = app(&[]).join("data");
+        let fs = scope::Fs::new(scope::FsScope::AppData, &data).unwrap();
+        let root = fs.root.clone();
+        let call = engine_with(
+            r#"native.save = ({ t }) => { hostWriteFile("n/t.txt", t); return hostReadFile("n/t.txt"); };
+               native.has = ({ p }) => hostExists(p);
+               native.dir = () => hostAppDataDir();
+               native.escape = () => hostReadFile("../../etc/passwd");
+               native.caught = () => { try { hostReadFile("missing"); } catch (e) { return e.message; } };"#,
+            Some(fs),
+        );
+        assert_eq!(call("save", r#"{"t":"hi"}"#), Ok(r#""hi""#.into()));
+        assert!(root.join("n/t.txt").is_file());
+        assert_eq!(call("has", r#"{"p":"n/t.txt"}"#), Ok("true".into()));
+        assert_eq!(
+            call("dir", "{}"),
+            Ok(serde_json::to_string(&root.to_string_lossy()).unwrap())
+        );
+        assert!(call("escape", "{}")
+            .unwrap_err()
+            .starts_with("permission_denied:"));
+        assert!(call("caught", "{}").unwrap().starts_with(r#""not_found:"#));
+    }
+
+    #[test]
+    fn prepare_rejects_bad_permissions_and_app_ids() {
+        let unknown = app(&[
+            (
+                "kestrel.json",
+                r#"{"appId":"a","title":"A","frontend":"web","permissions":["fs:root"]}"#,
+            ),
+            ("web/index.html", ""),
+        ]);
+        let e = prepare_err(&unknown);
+        assert!(
+            e.contains("`fs:root` is not a known permission") && e.contains("`permissions`"),
+            "{e}"
+        );
+
+        for id in ["../x", "A", "a/b", ".a", ""] {
+            let m = format!(r#"{{"appId":{id:?},"title":"A","frontend":"web"}}"#);
+            let dir = app(&[("kestrel.json", &m), ("web/index.html", "")]);
+            assert!(prepare_err(&dir).contains("`appId` must be"), "{id}");
+        }
+
+        let ok = app(&[
+            (
+                "kestrel.json",
+                r#"{"appId":"my.app-2","title":"A","frontend":"web","permissions":["fs:app-data"]}"#,
+            ),
+            ("web/index.html", ""),
+        ]);
+        let p = prepare(&ok.join("kestrel.json")).unwrap();
+        assert_eq!(p.fs_scope, Some(scope::FsScope::AppData));
     }
 
     #[test]
