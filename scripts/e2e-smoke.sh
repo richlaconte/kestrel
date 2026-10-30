@@ -4,6 +4,7 @@
 # the app's data dir, which KESTREL_DATA_DIR points at a temp dir here).
 # Usage: e2e-smoke.sh [react|vanilla]   (run under xvfb-run in CI)
 set -euo pipefail
+. "$(dirname "$0")/e2e-lib.sh"
 
 TEMPLATE="${1:-react}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,7 +12,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then REPO_ROOT="$(cygpath -m "$REPO_ROOT")"; fi
 KESTREL="node $REPO_ROOT/packages/kestrel/bin/kestrel.js"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rc=$?; rm_tree "$WORK"; exit $rc' EXIT
 DATA="$WORK/data"
 KESTREL_DATA_DIR="$DATA"
 command -v cygpath >/dev/null 2>&1 && KESTREL_DATA_DIR="$(cygpath -m "$DATA")"
@@ -57,5 +58,5 @@ if [ "$TEMPLATE" = "react" ]; then
   grep -q '"visits": *2' "$DATA/kestrel-data.json" || { echo "FAIL: bundle IPC never ran" >&2; exit 1; }
   test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -A "$FOREIGN")" >&2; exit 1; }
   echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
-  rm -rf "$FOREIGN"
+  rm_tree "$FOREIGN"
 fi

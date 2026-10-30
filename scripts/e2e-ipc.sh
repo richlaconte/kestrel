@@ -3,12 +3,13 @@
 # kind of native function (sync, async, rejecting, never-settling, slow)
 # returns to the webview. Usage: e2e-ipc.sh   (run under xvfb-run in CI)
 set -euo pipefail
+. "$(dirname "$0")/e2e-lib.sh"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${KESTREL_HOST:-$REPO_ROOT/host/target/release/kestrel-host}"
 [ -x "$HOST" ] || HOST="$HOST.exe"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rc=$?; rm_tree "$WORK"; exit $rc' EXIT
 cp -R "$REPO_ROOT/scripts/fixtures/ipc/." "$WORK"
 
 cd "$WORK"

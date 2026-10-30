@@ -4,6 +4,7 @@
 # B, then A again, and checks what each saw at startup.
 # Usage: e2e-storage.sh   (run under xvfb-run in CI)
 set -euo pipefail
+. "$(dirname "$0")/e2e-lib.sh"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${KESTREL_HOST:-$REPO_ROOT/host/target/release/kestrel-host}"
@@ -28,9 +29,7 @@ clear_stores() {
 cleanup() {
   local rc=$?
   cd /
-  # WebView2's helper processes outlive the host by a moment and keep the
-  # data dir locked on Windows: retry, and never let cleanup decide the result.
-  for _ in 1 2 3 4 5; do rm -rf "$WORK" 2>/dev/null && break; sleep 1; done
+  rm_tree "$WORK"
   clear_stores
   exit "$rc"
 }
