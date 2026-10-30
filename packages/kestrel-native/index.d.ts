@@ -65,7 +65,11 @@ export declare const appWindow: {
   setTitle(title: string): Promise<void>;
   minimize(): Promise<void>;
   maximize(): Promise<void>;
+  /** Under `tray.create({ closeToTray: true })`, the main window hides instead. */
   close(): Promise<void>;
+  /** Show, unminimize and focus the window, e.g. after it was closed to the tray. */
+  show(): Promise<void>;
+  hide(): Promise<void>;
   /**
    * Open another window on one of the app's pages, like "/settings" or
    * "about.html". It shares the app's storage and std-lib, and native
@@ -130,6 +134,51 @@ export declare const clipboard: {
 /** Open an http, https or mailto link in the default app. Needs "shell:open". */
 export declare const shell: {
   open(url: string): Promise<void>;
+};
+
+/** One entry in a tray menu. Ids are unique across the whole menu. */
+export type TrayMenuItem =
+  | { id: string; label: string; enabled?: boolean }
+  /** A check item toggles itself when clicked; onMenu gets its new state. */
+  | { id: string; label: string; checked: boolean; enabled?: boolean }
+  | { type: "separator" }
+  /** A submenu; they nest at most 4 deep. */
+  | { label: string; items: TrayMenuItem[]; enabled?: boolean };
+
+export interface TrayOptions {
+  tooltip?: string;
+  /** Text beside the icon. macOS only. */
+  title?: string;
+  /** Opens on a click; see `menuOnLeftClick`. */
+  menu?: TrayMenuItem[];
+  /**
+   * Default true. False keeps left click for `onClick` (say, to show the
+   * window) and opens the menu on right click. Windows and macOS; Linux
+   * always opens the menu.
+   */
+  menuOnLeftClick?: boolean;
+  /**
+   * Closing the main window hides it instead, so the app keeps running in
+   * the tray. Bring it back with `appWindow.show()`; on macOS a dock click
+   * does too. `app.quit()` still quits.
+   */
+  closeToTray?: boolean;
+}
+
+/**
+ * One icon in the menu bar (macOS) or system tray, showing the app's icon.
+ * Needs "tray". On Linux it needs libayatana-appindicator3, and rejects with
+ * `unsupported_platform` without it.
+ */
+export declare const tray: {
+  /** Show the icon, replacing the one already up. A bad menu rejects with `io`, naming the item. */
+  create(opts?: TrayOptions): Promise<void>;
+  /** Resolves false if there was no tray. */
+  destroy(): Promise<boolean>;
+  /** A menu item was clicked. Returns a function that unsubscribes. */
+  onMenu(cb: (e: { id: string; checked?: boolean }) => void): () => void;
+  /** The icon was left-clicked. Windows and macOS; Linux has no icon clicks. Pair with `menuOnLeftClick: false`. */
+  onClick(cb: () => void): () => void;
 };
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

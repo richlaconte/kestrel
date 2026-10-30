@@ -18,6 +18,8 @@ assert.equal(r.openAgain, "second", "an open label is focused, not opened twice"
 assert.deepEqual(r.openRemote, denied, "appWindow.open refuses other sites");
 assert.deepEqual(r.openBadLabel, { error: "io", kestrelError: true });
 assert.equal(r.fromSecond, "/second.html", "the second window shares the app's store");
+assert.equal(r.hide, null);
+assert.equal(r.show, null);
 
 if (mode === "granted") {
   assert.equal(r.readText, "héllo");
@@ -30,9 +32,21 @@ if (mode === "granted") {
   assert.equal(r.clipRead, true, "clipboard round trip");
   assert.deepEqual(r.openFile, { error: "io", kestrelError: true }, "file: links are refused");
   assert.deepEqual(r.openJunk, { error: "io", kestrelError: true });
+  assert.deepEqual(r.trayBad, { error: "io", kestrelError: true }, "a duplicate menu id is refused");
+  if (process.platform === "linux" && r.trayCreate !== null) {
+    // No appindicator library on the runner: refused, not a crash.
+    assert.deepEqual(r.trayCreate, { error: "unsupported_platform", kestrelError: true });
+    assert.equal(r.trayDestroy, false);
+  } else {
+    assert.equal(r.trayCreate, null, "tray.create");
+    assert.equal(r.closeToTray, "still running", "closeToTray hides the main window instead of closing it");
+    assert.equal(r.trayDestroy, true);
+  }
+  assert.equal(r.trayDestroyAgain, false);
 } else {
   for (const k of ["write", "readText", "readBytes", "exists", "missing", "escape", "storeFile",
-                   "clipWrite", "clipRead", "openFile", "openJunk", "notify"])
+                   "clipWrite", "clipRead", "openFile", "openJunk", "notify",
+                   "trayBad", "trayCreate", "trayDestroy", "trayDestroyAgain"])
     assert.deepEqual(r[k], denied, `${k} without an fs grant`);
 }
 console.log(`OK (${mode}, run ${run}): ${JSON.stringify(r)}`);

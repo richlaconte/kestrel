@@ -23,12 +23,35 @@ if (file) await fs.readText(file);    // needs "fs:pick": only what the user pic
 Also `notify(title, body?)` (`"notifications"`), `clipboard.readText/writeText`
 (`"clipboard"`), and `shell.open(url)` for http, https and mailto links (`"shell:open"`).
 
+A tray icon (`"tray"`), with the app's icon and a menu:
+
+```ts
+import { appWindow, app, tray } from "kestrel-native";
+
+await tray.create({
+  tooltip: "My App",
+  closeToTray: true, // closing the window hides it; the app keeps running
+  menu: [
+    { id: "show", label: "Show" },
+    { id: "mute", label: "Mute", checked: false },
+    { type: "separator" },
+    { id: "quit", label: "Quit" },
+  ],
+});
+tray.onMenu(({ id, checked }) => {
+  if (id === "show") appWindow.show();
+  if (id === "quit") app.quit();
+});
+```
+
 - `store` keeps JSON values in `<app data dir>/.kestrel/store.json` and needs no
   permission.
 - `fs` uses the same scope as native code: with `"fs:app-data"`, relative paths resolve
   in the app's data directory, and anything outside it rejects with
   `permission_denied`. `"fs:pick"` adds whatever the user picks in a dialog this run.
   Without an fs grant, every `fs` call rejects that way.
+- The tray's clicks reach every open window's `onMenu` / `onClick`. On Linux it needs
+  libayatana-appindicator3, and rejects with `unsupported_platform` without it.
 - Dialogs need no permission to show. File dialogs resolve to `null` when cancelled.
 - Every call returns a Promise that rejects with a `KestrelError` (`err.code`).
 

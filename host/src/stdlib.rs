@@ -66,6 +66,18 @@ pub fn window_close(window: WebviewWindow) -> Result<(), KestrelError> {
     window.close().map_err(window_err)
 }
 
+#[tauri::command]
+pub fn window_show(window: WebviewWindow) -> Result<(), KestrelError> {
+    window.show().map_err(window_err)?;
+    let _ = window.unminimize();
+    window.set_focus().map_err(window_err)
+}
+
+#[tauri::command]
+pub fn window_hide(window: WebviewWindow) -> Result<(), KestrelError> {
+    window.hide().map_err(window_err)
+}
+
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenOptions {
@@ -211,7 +223,7 @@ pub async fn store_keys(store: State<'_, Store>) -> Result<Vec<String>, KestrelE
 
 // ---- permissions for the non-fs modules ----
 
-fn require(manifest: &Manifest, permission: &str, call: &str) -> Result<(), KestrelError> {
+pub fn require(manifest: &Manifest, permission: &str, call: &str) -> Result<(), KestrelError> {
     if manifest.permissions.iter().any(|p| p == permission) {
         Ok(())
     } else {

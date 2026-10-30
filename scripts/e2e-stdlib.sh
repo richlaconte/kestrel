@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# E2E webview std-lib (#17, #18): app, window, fs, store, clipboard, and the
-# permission gates on dialog, notify and shell, called straight
+# E2E webview std-lib (#17, #18, #29): app, window, fs, store, clipboard, tray,
+# and the permission gates on dialog, notify and shell, called straight
 # from the webview through kestrel-native, with no native.ts. Runs the app
 # twice (the store must survive a restart), checks app.quit() ends the host
 # well before its safety timer (150 s), then runs it again without an fs grant.
@@ -22,7 +22,7 @@ cd "$WORK"
 native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 run() { # run <granted|ungranted> <run number>
-  local perms='["fs:app-data","clipboard","shell:open"]'
+  local perms='["fs:app-data","clipboard","shell:open","tray"]'
   [ "$1" = ungranted ] && perms='[]'
   printf '{"appId":"kestrel-e2e-stdlib-%s","title":"Std-lib","version":"1.2.3","frontend":".","permissions":%s}\n' \
     "$1" "$perms" > "$1.kestrel.json"

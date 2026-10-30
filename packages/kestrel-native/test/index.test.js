@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store } from "../index.js";
+import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store, tray } from "../index.js";
 
 /** Route invoke() to `impl`, recording each command and its args. */
 function fakeHost(impl) {
@@ -19,6 +19,8 @@ test("each std-lib call maps onto its host command", async () => {
   await win.minimize();
   await win.maximize();
   await win.close();
+  await win.show();
+  await win.hide();
   await win.open("/settings", { label: "settings", width: 400 });
   await fs.readText("a");
   await fs.writeText("a", "x");
@@ -34,6 +36,8 @@ test("each std-lib call maps onto its host command", async () => {
     ["window_minimize", undefined],
     ["window_maximize", undefined],
     ["window_close", undefined],
+    ["window_show", undefined],
+    ["window_hide", undefined],
     ["window_open", { path: "/settings", opts: { label: "settings", width: 400 } }],
     ["fs_read_text", { path: "a" }],
     ["fs_write_text", { path: "a", contents: "x" }],
@@ -99,4 +103,32 @@ test("dialog, notify, clipboard and shell map onto their host commands", async (
     ["clipboard_read_text", undefined],
     ["shell_open", { url: "https://example.com" }],
   ]);
+});
+
+test("tray maps onto its commands and splits its event by kind", async () => {
+  const calls = fakeHost(() => true);
+  const listeners = [];
+  globalThis.window.__TAURI__.event = {
+    listen: async (name, cb) => (listeners.push([name, cb]), () => {}),
+  };
+  const menu = [{ id: "show", label: "Show" }, { type: "separator" }];
+  await tray.create({ tooltip: "T", menu, closeToTray: true });
+  assert.equal(await tray.destroy(), true);
+  assert.deepEqual(calls, [
+    ["tray_create", { opts: { tooltip: "T", menu, closeToTray: true } }],
+    ["tray_destroy", undefined],
+  ]);
+
+  const got = [];
+  const off = tray.onMenu((e) => got.push(["menu", e]));
+  tray.onClick(() => got.push(["click"]));
+  assert.ok(listeners.every(([name]) => name === "kestrel:tray"));
+  for (const payload of [{ kind: "menu", id: "show" }, { kind: "click" }, { kind: "menu", id: "mute", checked: false }])
+    for (const [, cb] of listeners) cb({ payload });
+  assert.deepEqual(got, [
+    ["menu", { id: "show" }],
+    ["click"],
+    ["menu", { id: "mute", checked: false }],
+  ]);
+  assert.equal(typeof off, "function");
 });

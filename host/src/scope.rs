@@ -18,6 +18,7 @@ pub const KNOWN: &[&str] = &[
     "notifications",
     "clipboard",
     "shell:open",
+    "tray",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
