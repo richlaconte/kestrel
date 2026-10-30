@@ -16,5 +16,18 @@ export declare const fs: {
   appDataDir(): string;
 };
 
+/** `[event, payload]` pairs allowed by an event map. */
+export type EmitArgs<E> = {
+  [K in keyof E & string]: undefined extends E[K] ? [event: K, payload?: E[K]] : [event: K, payload: E[K]];
+}[keyof E & string];
+
+/**
+ * Send an event to the app's windows, where `on(event, cb)` from
+ * native-client receives it. Pass the `Events` map native.ts exports to
+ * check names and payloads: `emit<Events>("progress", { done: 1 })`.
+ * Events sent before a window subscribes are not kept.
+ */
+export declare function emit<E extends object = Record<string, unknown>>(...args: EmitArgs<E>): void;
+
 /** Print to the terminal running the app (stderr, prefixed `[native]`). */
 export declare function log(...args: unknown[]): void;

@@ -15,6 +15,12 @@ export declare class KestrelError extends Error {
   static from(e: unknown): KestrelError;
 }
 
+/**
+ * Subscribe to an event native code sends with `emit`. Returns a function
+ * that unsubscribes. The generated native-client has a typed `on`.
+ */
+export declare function on(event: string, cb: (payload: unknown) => void): () => void;
+
 export declare function callNative(name: string, args?: Record<string, unknown>): Promise<unknown>;
 
 export declare const app: {

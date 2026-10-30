@@ -294,9 +294,22 @@ async function loadClient(file, invokeImpl) {
     src = ts.transpileModule(src, {
       compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
     }).outputText.replace(/^import type .*$/m, "");
-  globalThis.window = { __TAURI__: { core: { invoke: invokeImpl } } };
+  globalThis.window = { __TAURI__: { core: { invoke: invokeImpl }, event: fakeEvents } };
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
+
+/** A fake `__TAURI__.event`: `fire` delivers to every live listener. */
+const listeners = new Set();
+const fakeEvents = {
+  listen: async (name, cb) => {
+    const l = { name, cb };
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+};
+const fire = (name, payload) => {
+  for (const l of listeners) if (l.name === name) l.cb({ payload });
+};
 
 const hostError = { code: "permission_denied", message: "../x is outside", detail: { function: "f" } };
 const fakeHost = async (_cmd, { name }) => {
@@ -350,4 +363,73 @@ test("host, typegen and kestrel-native agree on the error codes", () => {
   const dts = fs.readFileSync(path.join(repo, "packages", "kestrel-native", "index.d.ts"), "utf8");
   const union = dts.match(/export type KestrelErrorCode =([^;]*);/)[1];
   assert.deepEqual([...union.matchAll(/"([^"]+)"/g)].map((x) => x[1]), ERROR_CODES);
+});
+
+/** Type-check native.ts, the client and `use.ts`, with kestreljs/native/host resolvable. */
+function typecheckWith(dir, use) {
+  fs.writeFileSync(path.join(dir, "use.ts"), use);
+  const files = ["native.ts", "native-client.ts", "use.ts"].map((f) => path.join(dir, f));
+  const program = ts.createProgram(files, {
+    target: ts.ScriptTarget.ES2020,
+    lib: ["lib.es2020.d.ts", "lib.dom.d.ts"],
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    paths: { "kestreljs/native/host": [path.resolve(fileURLToPath(import.meta.url), "../../native/host.d.ts")] },
+  });
+  return ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+}
+
+const EVENTS_SRC = `
+  import { emit } from "kestreljs/native/host";
+  export interface Events { progress: { done: number; total: number }; finished: undefined }
+  export function work(): number {
+    emit<Events>("progress", { done: 1, total: 2 });
+    emit<Events>("finished");
+    return 2;
+  }
+`;
+
+test("an exported Events map types emit and on (#22)", () => {
+  const { dir, client, res } = gen(EVENTS_SRC);
+  assert.match(client, /import type \{ Events \} from "\.\/native";/);
+  assert.match(client, /export function on<K extends keyof Events & string>/);
+  assert.deepEqual(res.names, ["work"]);
+  assert.deepEqual(
+    typecheckWith(dir, `import { on } from "./native-client";\nconst off: () => void = on("progress", (p) => p.done.toFixed());\noff();\n`),
+    [],
+  );
+  const wrong = typecheckWith(dir, `import { on } from "./native-client";\non("progres", () => {});\non("progress", (p) => p.nope);\n`);
+  assert.equal(wrong.length, 2, wrong.join("\n"));
+  fs.writeFileSync(path.join(dir, "native.ts"), EVENTS_SRC.replace("{ done: 1, total: 2 }", '{ done: "1", total: 2 }'));
+  assert.equal(typecheckWith(dir, "").length, 1, "emit checks the payload against Events");
+});
+
+test("without an Events map, on is untyped; on is a reserved name (#22)", () => {
+  const { dir, client } = gen("export const f = (): number => 1;\n");
+  assert.match(client, /export function on\(event: string, cb: \(payload: unknown\) => void\): \(\) => void/);
+  assertCompiles(dir);
+  assert.throws(() => gen("export function on() {}\n"), /`on` is reserved/);
+});
+
+test("emit reaches on in the client, filtered by name, until unsubscribed (#22)", async () => {
+  const { res, dir } = gen(EVENTS_SRC);
+  const sent = [];
+  const native = load(res, { hostEmit: (e, json) => sent.push([e, JSON.parse(json)]) });
+  assert.equal(native.work(), 2);
+  assert.deepEqual(sent, [["progress", { done: 1, total: 2 }], ["finished", null]]);
+  const { emit } = await import("../native/host.js");
+  assert.throws(() => emit("", 1), /event name must be a non-empty string/);
+
+  const client = await loadClient(path.join(dir, "native-client.ts"), fakeHost);
+  const got = [];
+  const off = client.on("progress", (p) => got.push(p));
+  await new Promise((r) => setTimeout(r));
+  for (const [event, payload] of sent) fire("kestrel:native", { event, payload });
+  assert.deepEqual(got, [{ done: 1, total: 2 }]);
+  off();
+  await new Promise((r) => setTimeout(r));
+  fire("kestrel:native", { event: "progress", payload: { done: 2, total: 2 } });
+  assert.equal(got.length, 1, "no delivery after unsubscribing");
 });

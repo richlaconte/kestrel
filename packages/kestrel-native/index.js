@@ -36,6 +36,19 @@ const invoke = (cmd, args) => {
   });
 };
 
+/**
+ * Subscribe to an event native code sends with `emit`. Returns a function
+ * that unsubscribes. Prefer the typed `on` in the generated native-client.
+ */
+export const on = (event, cb) => {
+  const events = globalThis.window?.__TAURI__?.event;
+  if (!events) return () => {};
+  const off = events.listen("kestrel:native", (e) => {
+    if (e.payload.event === event) cb(e.payload.payload);
+  });
+  return () => off.then((f) => f());
+};
+
 /** Low-level escape hatch; prefer generated stubs from `kestrel typegen`. */
 export const callNative = (name, args = {}) => invoke("call_native", { name, args });
 

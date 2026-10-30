@@ -104,6 +104,8 @@ Semantics, all spike-verified except (d):
   can import sibling files and pure-JS npm packages. Node built-ins don't exist in QuickJS
   and are a build error. `kestreljs/native/host` is a typed module over the host bindings
   (shipped in the CLI package, which is why it isn't spelled `kestrel/native/host`).
+- (g) **Events:** `emit(event, payload)` pushes to the webview's `on(event, cb)` while a
+  call runs (progress, partial results). See §8, question 1.
 
 ## 5. Typegen contract
 
@@ -140,8 +142,14 @@ docs list every code per call. (Friction item K3: raw Rust panics are not an err
 
 ## 8. Open questions for comment
 
-1. Should `native.ts` allow exporting event streams (host → webview push), or is v0
-   request/response only? (Tauri events exist under the hood.)
+1. ~~Should `native.ts` allow exporting event streams (host → webview push), or is v0
+   request/response only?~~ **Decided (#22):** push, typed by an exported map. Native
+   code calls `emit(event, payload)` from `kestreljs/native/host`; the webview subscribes
+   with `on(event, cb)` from the generated client, which returns an unsubscribe function.
+   When native.ts exports `interface Events { progress: { done: number } }`, typegen types
+   `on` from it, and `emit<Events>(…)` checks names and payloads on the native side.
+   Events go to every window of the app and need no permission. Events sent before a
+   window subscribes are dropped; they are not queued.
 2. `frontend: { "dev": "vite" }` — blessed Vite integration in v0, or static-only until
    the React template lands?
 3. ~~Is `store` a thin file under app-data (simple, debuggable) or SQLite from day one?~~

@@ -99,6 +99,10 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   fails with an error that says why). Typed client stubs are generated with the
   TypeScript compiler API, including named types, so a rename breaks the frontend at
   compile time
+- **Native code can push events to the page.** `emit("progress", { done })` from
+  `kestreljs/native/host` reaches `on("progress", cb)` in the generated client while a
+  call is still running. Export an `Events` interface from `native.ts` and both sides
+  are typed: a wrong event name or payload fails to compile
 - **Native code hot-reloads.** `kestrel dev` watches `native.ts` and everything it
   imports. A save rebuilds the bundle and the stubs, and the host swaps in a fresh
   engine, so the next call runs the new code without restarting the window. Module

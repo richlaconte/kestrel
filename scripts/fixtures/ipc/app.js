@@ -21,6 +21,15 @@ for (const [name, args] of [
   ["cancels"],
 ]) results[name] = await outcome(call(name, args));
 
+// #22: native code's emit arrives as one "kestrel:native" event per emit,
+// in order. (kestrel-native and the generated client's `on` wrap this.)
+const events = [];
+const unlisten = await window.__TAURI__.event.listen("kestrel:native", (e) => events.push(e.payload));
+results.progress = await outcome(call("progress", { n: 3 }));
+await new Promise((r) => setTimeout(r, 300));
+unlisten();
+results.events = events;
+
 // #5: while a native call spins for 2 s, the page must keep painting.
 let frames = 0;
 const count = () => { frames++; document.getElementById("tick").textContent = frames; if (spinning) requestAnimationFrame(count); };

@@ -30,6 +30,15 @@ export const fs = {
   },
 };
 
+/**
+ * Send an event to the app's windows, where `on(event, cb)` from
+ * native-client receives it. The payload must survive JSON.stringify.
+ */
+export function emit(event, payload) {
+  if (typeof event !== "string" || !event) throw new TypeError("emit: the event name must be a non-empty string");
+  globalThis.hostEmit(event, JSON.stringify(payload === undefined ? null : payload));
+}
+
 /** Print to the terminal running the app (stderr, prefixed `[native]`). */
 export function log(...args) {
   globalThis.hostLog(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
