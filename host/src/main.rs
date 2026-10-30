@@ -14,6 +14,8 @@ use std::{
 mod error;
 mod scope;
 mod serve;
+mod stdlib;
+mod store;
 
 use error::KestrelError;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,10 @@ use tauri::{State, WebviewUrl, WebviewWindowBuilder};
 struct Manifest {
     app_id: String,
     title: String,
+    /// The app's version, for `app.version()`. The CLI fills it from
+    /// kestrel.json or package.json.
+    #[serde(default = "default_version")]
+    version: String,
     #[serde(default = "default_width")]
     width: f64,
     #[serde(default = "default_height")]
@@ -58,6 +64,9 @@ struct Manifest {
     exit_after_ms: Option<u64>,
 }
 
+fn default_version() -> String {
+    "0.0.0".into()
+}
 fn default_width() -> f64 {
     800.0
 }
@@ -485,7 +494,7 @@ fn main() {
         manifest
             .native
             .as_ref()
-            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs))),
+            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs.clone()))),
     );
 
     if manifest.dev_reload {
@@ -499,6 +508,8 @@ fn main() {
     tauri::Builder::default()
         .manage(manifest)
         .manage(engine)
+        .manage(stdlib::WebFs(fs))
+        .manage(store::Store::open(&data_dir))
         .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
             match &dev_base {
                 // Dev: reverse-proxy to the frontend dev server, off the
@@ -514,7 +525,25 @@ fn main() {
                 )),
             }
         })
-        .invoke_handler(tauri::generate_handler![get_manifest, call_native])
+        .invoke_handler(tauri::generate_handler![
+            get_manifest,
+            call_native,
+            stdlib::app_version,
+            stdlib::app_quit,
+            stdlib::window_set_title,
+            stdlib::window_minimize,
+            stdlib::window_maximize,
+            stdlib::window_close,
+            stdlib::fs_read_text,
+            stdlib::fs_read_bytes,
+            stdlib::fs_write_text,
+            stdlib::fs_exists,
+            stdlib::fs_app_data_dir,
+            stdlib::store_get,
+            stdlib::store_set,
+            stdlib::store_delete,
+            stdlib::store_keys,
+        ])
         .setup(move |app| {
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))

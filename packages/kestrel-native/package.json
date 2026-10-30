@@ -14,5 +14,8 @@
   "files": [
     "index.js",
     "index.d.ts"
-  ]
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
 }

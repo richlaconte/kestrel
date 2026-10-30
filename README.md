@@ -70,6 +70,13 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   and an optional `detail`, so `err instanceof KestrelError && err.code === "not_found"`
   works. An uncaught `fs.readText` miss keeps its `not_found` code; native code can
   throw an error with its own `code` from the set
+- **A std-lib you call straight from the webview**, no `native.ts` needed:
+  `import { app, appWindow, fs, store } from "kestrel-native"`. `app.version()` and
+  `app.quit()`; `appWindow.setTitle/minimize/maximize/close`; `fs.readText/readBytes/
+  writeText/exists/appDataDir` with the same permission scope native code gets; and a
+  durable `store` (`get/set/delete/keys`) in `<app data dir>/.kestrel/store.json`,
+  saved to disk before each change resolves. `dialog`, `notify`, `clipboard` and
+  `shell` are next
 - **Each app gets its own webview storage**, even though every app shares the host
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
   keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on
@@ -95,8 +102,8 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   from any directory
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-permissions beyond the filesystem, the full
-`kestrel/native` std-lib, and signed installers with auto-update on top of `build`. See
+permissions beyond the filesystem, the rest of the std-lib (`dialog`, `notify`,
+`clipboard`, `shell`, `window.open`), and signed installers with auto-update on top of `build`. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

@@ -23,6 +23,11 @@
       "type": "string",
       "minLength": 1
     },
+    "version": {
+      "description": "The app's version, returned by app.version(). Defaults to package.json's version.",
+      "type": "string",
+      "minLength": 1
+    },
     "width": {
       "description": "Initial window width in logical pixels.",
       "type": "number",

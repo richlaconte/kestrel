@@ -1,6 +1,7 @@
-// kestrel-native — v0 client runtime (spike-level).
+// kestrel-native — v0 client runtime.
 // The std-lib surface here mirrors docs/rfc-0001-native-api.md §3; only the
-// modules the host implements are exported. `store` lands with issue #18.
+// modules the host implements are exported. Every call returns a Promise that
+// rejects with a KestrelError.
 
 /**
  * Every rejection from the host (RFC-0001 §7). Generated native-client files
@@ -38,7 +39,38 @@ const invoke = (cmd, args) => {
 /** Low-level escape hatch; prefer generated stubs from `kestrel typegen`. */
 export const callNative = (name, args = {}) => invoke("call_native", { name, args });
 
-/** app — identity & manifest */
+/** app — identity & lifecycle */
 export const app = {
   manifest: () => invoke("get_manifest"),
+  version: () => invoke("app_version"),
+  quit: () => invoke("app_quit"),
+};
+
+/** appWindow — the app's main window. Not `window`: importing that name
+ * would shadow the DOM global in the importing file. */
+export const appWindow = {
+  setTitle: (title) => invoke("window_set_title", { title }),
+  minimize: () => invoke("window_minimize"),
+  maximize: () => invoke("window_maximize"),
+  close: () => invoke("window_close"),
+};
+
+/** fs — files, gated by kestrel.json `permissions` (same scope as native code) */
+export const fs = {
+  readText: (path) => invoke("fs_read_text", { path }),
+  readBytes: (path) => invoke("fs_read_bytes", { path }).then((b) => new Uint8Array(b)),
+  writeText: (path, contents) => invoke("fs_write_text", { path, contents }),
+  exists: (path) => invoke("fs_exists", { path }),
+  appDataDir: () => invoke("fs_app_data_dir"),
+};
+
+/** store — durable key-value storage, saved before each change resolves */
+export const store = {
+  get: (key) => invoke("store_get", { key }).then((v) => (v === null ? undefined : v)),
+  set: (key, value) =>
+    value === undefined
+      ? Promise.reject(new KestrelError("io", `store.set("${key}", undefined): use store.delete to remove a key`))
+      : invoke("store_set", { key, value }),
+  delete: (key) => invoke("store_delete", { key }),
+  keys: () => invoke("store_keys"),
 };
