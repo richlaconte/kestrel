@@ -176,3 +176,10 @@ test("vanilla .js native modules still produce a JS client", () => {
   assert.deepEqual(res.names, ["hello", "bye"]);
   assert.ok(fs.existsSync(path.join(dir, "native-client.js")));
 });
+
+test("syntax errors in native.ts are reported with native.ts line and column", () => {
+  assert.throws(
+    () => gen("export function ok(): number { return 1; }\nexport function bad( { \n"),
+    (e) => e instanceof TypegenError && /native\.ts:\d+:\d+: /.test(e.message),
+  );
+});

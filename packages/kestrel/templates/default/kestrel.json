@@ -1,4 +1,5 @@
 {
+  "$schema": "https://unpkg.com/kestreljs/schema/kestrel.schema.json",
   "appId": "my-app",
   "title": "My App",
   "width": 720,

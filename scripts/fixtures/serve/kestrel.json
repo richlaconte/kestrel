@@ -1,0 +1,8 @@
+{
+  "appId": "kestrel-serve-fixture",
+  "title": "Serve fixture",
+  "width": 400,
+  "height": 300,
+  "frontend": { "dev": "vite", "dist": "dist" },
+  "native": "native.js"
+}

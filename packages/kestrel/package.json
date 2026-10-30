@@ -1,11 +1,17 @@
 {
   "name": "kestreljs",
   "version": "0.1.0",
-  "description": "Kestrel — just React, actually native. The CLI: create, dev, typegen, build.",
+  "description": "Kestrel \u2014 just React, actually native. The CLI: create, dev, typegen, build.",
   "license": "MIT",
   "type": "module",
   "bin": {
     "kestrel": "bin/kestrel.js"
+  },
+  "exports": {
+    "./vite": "./src/vite.js",
+    "./bin/kestrel.js": "./bin/kestrel.js",
+    "./package.json": "./package.json",
+    "./schema/kestrel.schema.json": "./schema/kestrel.schema.json"
   },
   "engines": {
     "node": ">=18"
@@ -20,6 +26,7 @@
   "homepage": "https://github.com/richlaconte/kestrel",
   "files": [
     "bin",
+    "schema",
     "src",
     "templates"
   ],

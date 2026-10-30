@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/kestreljs/schema/kestrel.schema.json",
+  "title": "kestrel.json",
+  "description": "A Kestrel app manifest.",
+  "type": "object",
+  "required": [
+    "appId",
+    "title",
+    "frontend"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "appId": {
+      "description": "Stable identifier: lowercase letters, digits, dots and dashes.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "title": {
+      "description": "Window title.",
+      "type": "string",
+      "minLength": 1
+    },
+    "width": {
+      "description": "Initial window width in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "height": {
+      "description": "Initial window height in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "frontend": {
+      "description": "A directory with index.html, or a Vite setup.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "dev"
+          ],
+          "properties": {
+            "dev": {
+              "const": "vite"
+            },
+            "dist": {
+              "description": "Vite's build output directory.",
+              "type": "string",
+              "default": "dist"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "native": {
+      "description": "Native functions module (native.ts or native.js), run inside the host.",
+      "type": "string",
+      "pattern": "\\.(ts|js)$"
+    },
+    "csp": {
+      "description": "Content-Security-Policy for the built app (never applied in dev). Omit for Kestrel's default: scripts only from the app, no eval. An empty string turns it off.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

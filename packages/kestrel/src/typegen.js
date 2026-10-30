@@ -78,8 +78,19 @@ export function analyze(entry) {
     strict: true,
     noEmit: true,
   });
-  const checker = program.getTypeChecker();
   const source = program.getSourceFile(entry);
+  // Syntax errors stop here, with native.ts positions, instead of surfacing
+  // later as a load error against the compiled file.
+  const syntax = program.getSyntacticDiagnostics(source);
+  if (syntax.length) {
+    const lines = syntax.map((d) => {
+      const { line, character } = source.getLineAndCharacterOfPosition(d.start ?? 0);
+      const msg = ts.flattenDiagnosticMessageText(d.messageText, " ");
+      return `${path.basename(entry)}:${line + 1}:${character + 1}: ${msg}`;
+    });
+    throw new TypegenError(`syntax error in native module:\n  ${lines.join("\n  ")}`);
+  }
+  const checker = program.getTypeChecker();
   const moduleSym = checker.getSymbolAtLocation(source);
   const exports = moduleSym ? checker.getExportsOfModule(moduleSym) : [];
   const exportedNames = new Set(exports.map((s) => s.name));

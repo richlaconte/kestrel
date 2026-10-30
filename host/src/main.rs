@@ -6,12 +6,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
-    collections::HashMap,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
 };
+
+mod serve;
 
 use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewUrl, WebviewWindowBuilder};
@@ -37,6 +37,10 @@ struct Manifest {
     /// while Vite's HMR websocket connects to the dev server directly.
     #[serde(default)]
     dev_url: Option<String>,
+    /// Content-Security-Policy for the built app's HTML. Absent: the
+    /// default policy. Empty string: none. Never applied in dev.
+    #[serde(default)]
+    csp: Option<String>,
     /// Headless-run safety net: exit after N ms so CI runs always terminate.
     #[serde(default)]
     exit_after_ms: Option<u64>,
@@ -48,9 +52,6 @@ fn default_width() -> f64 {
 fn default_height() -> f64 {
     600.0
 }
-
-/// Stand-in for the "store" std-lib module: an in-memory KV per app run.
-struct Kv(Mutex<HashMap<String, String>>);
 
 // ---- native-functions engine (QuickJS on a dedicated thread) ----
 
@@ -72,7 +73,7 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
         let rt = Runtime::new().expect("quickjs runtime");
         let context = Context::full(&rt).expect("quickjs context");
 
-        context.with(|ctx| {
+        let load_error: Option<String> = context.with(|ctx| {
             let globals = ctx.globals();
             // Host bindings: the privileged surface native functions may touch.
             globals
@@ -143,14 +144,38 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
             )
             .expect("prelude");
 
-            let user_src = std::fs::read_to_string(&script_path).expect("read native module");
-            if let Err(e) = ctx.eval::<(), _>(user_src) {
-                let detail = format!("{:?}", ctx.catch());
-                panic!("eval native module: {e}: {detail}");
+            // A broken module must not take the engine down: report it once
+            // and reject every call with the same message.
+            let file = script_path.display();
+            let user_src = match std::fs::read_to_string(&script_path) {
+                Ok(src) => src,
+                Err(e) => return Some(format!("cannot read native module {file}: {e}")),
+            };
+            match ctx.eval::<(), _>(user_src) {
+                Ok(()) => None,
+                Err(e) => {
+                    let exc = ctx.catch();
+                    let exc = exc.as_exception();
+                    let msg = exc
+                        .and_then(|x| x.message())
+                        .unwrap_or_else(|| e.to_string());
+                    let at = exc
+                        .and_then(|x| x.line())
+                        .map(|l| format!("{file}:{l}"))
+                        .unwrap_or_else(|| file.to_string());
+                    Some(format!("native module failed to load ({at}): {msg}"))
+                }
             }
         });
+        if let Some(err) = &load_error {
+            eprintln!("kestrel-host: error: {err}");
+        }
 
         while let Ok((name, args, reply)) = rx.recv() {
+            if let Some(err) = &load_error {
+                let _ = reply.send(Err(err.clone()));
+                continue;
+            }
             let res = context.with(|ctx| -> Result<String, String> {
                 let js_err = |e: rquickjs::Error| {
                     // Surface the JS exception message when there is one.
@@ -203,16 +228,6 @@ fn get_manifest(state: State<Manifest>) -> Manifest {
     state.inner().clone()
 }
 
-#[tauri::command]
-fn kv_set(state: State<Kv>, key: String, value: String) {
-    state.0.lock().unwrap().insert(key, value);
-}
-
-#[tauri::command]
-fn kv_get(state: State<Kv>, key: String) -> Option<String> {
-    state.0.lock().unwrap().get(&key).cloned()
-}
-
 /// Bridge: webview -> user's native function inside the embedded engine.
 /// `async` so Tauri runs it off the main thread: a slow native function must
 /// never freeze painting or input. No timeout: long jobs are legitimate.
@@ -238,28 +253,60 @@ async fn call_native(
     serde_json::from_str(&json).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn echo(msg: String) -> String {
-    format!("host echoes: {msg}")
+/// A loaded manifest with every path resolved and checked.
+struct Prepared {
+    manifest: Manifest,
+    frontend_dir: PathBuf,
 }
 
-/// Writes an on-disk proof that this app ran IPC against the shared host.
-#[tauri::command]
-fn prove(state: State<Manifest>, payload: String) -> Result<String, String> {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis() as u64;
-    let proof = serde_json::json!({
-        "appId": state.app_id,
-        "title": state.title,
-        "payload": payload,
-        "provedAtMs": ts,
-        "host": "kestrel-host 0.1.0 (shared binary, no recompile)",
-    });
-    let path = format!("/tmp/kestrel-proof-{}.json", state.app_id);
-    fs::write(&path, serde_json::to_string_pretty(&proof).unwrap()).map_err(|e| e.to_string())?;
-    Ok(format!("proof written to {path}"))
+/// Load and validate the manifest. Errors are single-line and name the file
+/// and the field to fix: they are the user's first contact with a mistake.
+fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
+    let shown = manifest_path.display();
+    let raw = fs::read_to_string(manifest_path).map_err(|e| {
+        format!(
+            "cannot read manifest {shown}: {e}. Pass the path to kestrel.json, \
+             or put kestrel.json next to the executable."
+        )
+    })?;
+    let mut manifest: Manifest =
+        serde_json::from_str(&raw).map_err(|e| format!("invalid manifest {shown}: {e}"))?;
+
+    // Relative paths in the manifest resolve against the manifest's own
+    // directory, never the process cwd.
+    let manifest_dir = manifest_path
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .ok_or_else(|| format!("cannot resolve the directory of {shown}"))?;
+
+    let frontend_dir = manifest_dir
+        .join(&manifest.frontend)
+        .canonicalize()
+        .map_err(|e| {
+            format!(
+                "frontend directory `{}` (from {shown}) not found: {e}. \
+                 Check the `frontend` field.",
+                manifest.frontend
+            )
+        })?;
+    if manifest.dev_url.is_none() && !frontend_dir.join("index.html").is_file() {
+        return Err(format!(
+            "no index.html in frontend directory {} (from {shown}). \
+             Build the frontend first, or check the `frontend` field.",
+            frontend_dir.display()
+        ));
+    }
+    if let Some(n) = &manifest.native {
+        let p = manifest_dir.join(n).canonicalize().map_err(|e| {
+            format!("native module `{n}` (from {shown}) not found: {e}. Check the `native` field.")
+        })?;
+        manifest.native = Some(p.to_string_lossy().into_owned());
+    }
+    Ok(Prepared {
+        manifest,
+        frontend_dir,
+    })
 }
 
 fn main() {
@@ -268,15 +315,17 @@ fn main() {
     let manifest_path: PathBuf = match std::env::args().nth(1) {
         Some(p) => PathBuf::from(p),
         None => std::env::current_exe()
-            .expect("current_exe")
-            .parent()
-            .expect("exe dir")
-            .join("kestrel.json"),
+            .ok()
+            .and_then(|exe| exe.parent().map(|d| d.join("kestrel.json")))
+            .unwrap_or_else(|| PathBuf::from("kestrel.json")),
     };
-    let raw = fs::read_to_string(&manifest_path)
-        .unwrap_or_else(|e| panic!("cannot read manifest {}: {e}", manifest_path.display()));
-    let mut manifest: Manifest =
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid manifest: {e}"));
+    let Prepared {
+        mut manifest,
+        frontend_dir,
+    } = prepare(&manifest_path).unwrap_or_else(|e| {
+        eprintln!("kestrel-host: error: {e}");
+        std::process::exit(1);
+    });
 
     // Test hook for headless CI runs of built bundles.
     if let Ok(ms) = std::env::var("KESTREL_EXIT_AFTER_MS") {
@@ -285,116 +334,60 @@ fn main() {
         }
     }
 
-    // Relative paths in the manifest resolve against the manifest's own
-    // directory, never the process cwd.
-    let manifest_dir = manifest_path
-        .canonicalize()
-        .unwrap_or_else(|e| panic!("manifest path: {e}"))
-        .parent()
-        .expect("manifest dir")
-        .to_path_buf();
-
-    let frontend_dir: PathBuf = manifest_dir
-        .join(&manifest.frontend)
-        .canonicalize()
-        .unwrap_or_else(|e| panic!("frontend dir {}: {e}", manifest.frontend));
-    if let Some(n) = &manifest.native {
-        manifest.native = Some(
-            manifest_dir
-                .join(n)
-                .canonicalize()
-                .unwrap_or_else(|e| panic!("native module {n}: {e}"))
-                .to_string_lossy()
-                .into_owned(),
-        );
-    }
     let dev_base = manifest.dev_url.clone();
+    let csp = manifest
+        .csp
+        .clone()
+        .unwrap_or_else(|| serve::DEFAULT_CSP.to_string());
 
-    let engine = NativeEngine(manifest.native.as_ref().map(|p| {
-        let script = PathBuf::from(p)
-            .canonicalize()
-            .unwrap_or_else(|e| panic!("native module {p}: {e}"));
-        Mutex::new(start_native_engine(script))
-    }));
+    let engine = NativeEngine(
+        manifest
+            .native
+            .as_ref()
+            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p)))),
+    );
 
     let window_cfg = manifest.clone();
 
     tauri::Builder::default()
         .manage(manifest)
         .manage(engine)
-        .manage(Kv(Mutex::new(HashMap::new())))
-        .register_uri_scheme_protocol("kestrel", move |_ctx, request| {
-            // Dev mode: reverse-proxy everything to the frontend dev server.
-            if let Some(base) = &dev_base {
-                let pq = request
-                    .uri()
-                    .path_and_query()
-                    .map(|x| x.as_str())
-                    .unwrap_or("/");
-                let target = format!("{}{}", base.trim_end_matches('/'), pq);
-                return match minreq::get(&target).send() {
-                    Ok(resp) => {
-                        let mime = resp
-                            .headers
-                            .get("content-type")
-                            .cloned()
-                            .unwrap_or_else(|| "application/octet-stream".into());
-                        tauri::http::Response::builder()
-                            .status(resp.status_code as u16)
-                            .header("Content-Type", mime)
-                            .body(resp.into_bytes())
-                            .unwrap()
-                    }
-                    Err(e) => tauri::http::Response::builder()
-                        .status(502)
-                        .header("Content-Type", "text/plain")
-                        .body(format!("kestrel dev proxy: {e}").into_bytes())
-                        .unwrap(),
-                };
-            }
-            let rel = request.uri().path().trim_start_matches('/');
-            let rel = if rel.is_empty() { "index.html" } else { rel };
-            // Guard against path traversal out of the frontend dir.
-            let file = frontend_dir.join(rel);
-            let ok = file
-                .canonicalize()
-                .map(|f| f.starts_with(&frontend_dir))
-                .unwrap_or(false);
-            match (ok, fs::read(&file)) {
-                (true, Ok(body)) => {
-                    let mime = match rel.rsplit('.').next() {
-                        Some("html") => "text/html",
-                        Some("js") => "text/javascript",
-                        Some("css") => "text/css",
-                        Some("svg") => "image/svg+xml",
-                        Some("json") => "application/json",
-                        Some("png") => "image/png",
-                        _ => "application/octet-stream",
-                    };
-                    tauri::http::Response::builder()
-                        .header("Content-Type", mime)
-                        .body(body)
-                        .unwrap()
+        .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
+            match &dev_base {
+                // Dev: reverse-proxy to the frontend dev server, off the
+                // main thread so a slow transform never blocks the UI.
+                Some(base) => {
+                    let base = base.clone();
+                    std::thread::spawn(move || responder.respond(serve::proxy(&base, &request)));
                 }
-                _ => tauri::http::Response::builder()
-                    .status(404)
-                    .body(Vec::new())
-                    .unwrap(),
+                None => responder.respond(serve::serve_static(
+                    &frontend_dir,
+                    request.uri().path(),
+                    &csp,
+                )),
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            get_manifest,
-            kv_set,
-            kv_get,
-            echo,
-            prove,
-            call_native
-        ])
+        .invoke_handler(tauri::generate_handler![get_manifest, call_native])
         .setup(move |app| {
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title(&window_cfg.title)
                 .inner_size(window_cfg.width, window_cfg.height)
+                // The window only ever shows the app. External links open
+                // in the system browser; anything else is refused.
+                .on_navigation(|url| {
+                    if serve::is_app_url(url) || url.scheme() == "about" {
+                        return true;
+                    }
+                    serve::open_external(url);
+                    false
+                })
+                .on_new_window(|url, _| {
+                    if !serve::is_app_url(&url) {
+                        serve::open_external(&url);
+                    }
+                    tauri::webview::NewWindowResponse::Deny
+                })
                 .build()?;
             if let Some(ms) = window_cfg.exit_after_ms {
                 let handle = app.handle().clone();
@@ -412,6 +405,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     /// Start an engine on `src` and return a caller: name + args JSON → result.
     fn engine(src: &str) -> impl Fn(&str, &str) -> Result<String, String> {
@@ -470,6 +464,92 @@ mod tests {
         let call = engine("native.hang = () => new Promise(() => {}); native.ok = () => 1;");
         assert!(call("hang", "{}").unwrap_err().contains("never settled"));
         assert_eq!(call("ok", "{}"), Ok("1".into()));
+    }
+
+    #[test]
+    fn broken_module_rejects_calls_with_file_and_line() {
+        let call = engine("native.ok = () => 1;\nnative.bad = (;\n");
+        let err = call("ok", "{}").unwrap_err();
+        assert!(err.contains("native module failed to load"), "{err}");
+        assert!(err.contains("native.js:2"), "{err}");
+        // The engine stays up and keeps answering.
+        assert_eq!(call("ok", "{}"), Err(err));
+    }
+
+    #[test]
+    fn module_that_throws_at_load_is_reported() {
+        let call = engine("throw new Error('boot failed');");
+        let err = call("x", "{}").unwrap_err();
+        assert!(err.contains("boot failed"), "{err}");
+    }
+
+    /// Write files into a fresh dir and return it.
+    fn app(files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "kestrel-prepare-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for (name, body) in files {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, body).unwrap();
+        }
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn prepare_err(dir: &Path) -> String {
+        match prepare(&dir.join("kestrel.json")) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => e,
+        }
+    }
+
+    const OK: &str = r#"{"appId":"a","title":"A","frontend":"web","native":"native.js"}"#;
+
+    #[test]
+    fn prepare_accepts_a_valid_app_and_resolves_paths() {
+        let dir = app(&[
+            ("kestrel.json", OK),
+            ("web/index.html", ""),
+            ("native.js", ""),
+        ]);
+        let p = prepare(&dir.join("kestrel.json")).unwrap();
+        assert!(p.frontend_dir.is_absolute());
+        assert!(Path::new(p.manifest.native.as_deref().unwrap()).is_absolute());
+    }
+
+    #[test]
+    fn prepare_reports_each_failure_mode() {
+        let missing = app(&[]);
+        assert!(prepare_err(&missing).starts_with("cannot read manifest"));
+
+        let bad_json = app(&[("kestrel.json", "{ nope")]);
+        assert!(prepare_err(&bad_json).contains("invalid manifest"));
+
+        let no_field = app(&[("kestrel.json", r#"{"title":"A","frontend":"."}"#)]);
+        assert!(prepare_err(&no_field).contains("missing field `appId`"));
+
+        let no_frontend = app(&[("kestrel.json", OK), ("native.js", "")]);
+        let e = prepare_err(&no_frontend);
+        assert!(
+            e.contains("frontend directory `web`") && e.contains("`frontend` field"),
+            "{e}"
+        );
+
+        let no_index = app(&[("kestrel.json", OK), ("web/x.css", ""), ("native.js", "")]);
+        assert!(prepare_err(&no_index).contains("no index.html"));
+
+        let no_native = app(&[("kestrel.json", OK), ("web/index.html", "")]);
+        let e = prepare_err(&no_native);
+        assert!(
+            e.contains("native module `native.js`") && e.contains("`native` field"),
+            "{e}"
+        );
     }
 
     #[test]
