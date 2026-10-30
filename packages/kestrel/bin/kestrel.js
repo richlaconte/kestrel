@@ -406,22 +406,48 @@ async function build(dir = ".") {
     }
     info(`built ${path.relative(process.cwd(), image)}`);
   }
+  const linuxOut = process.platform === "linux" && ["--deb", "--appimage"].some((f) => args.includes(f));
   if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
-  else if (!mac) console.log("  note: unsigned portable build. Installers for Windows are coming (#25).");
+  if (process.platform === "linux" && args.includes("--appimage")) await makeAppImage(dir, m, out, version, icons);
+  if (process.platform === "win32") console.log("  note: unsigned portable build. A Windows installer is coming (#25).");
+  else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
+}
+
+function readPackageJson(dir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+  } catch {
+    return {};
+  }
 }
 
 /** build/<name>_<version>_<arch>.deb from the portable folder. */
 function makeDeb(dir, m, out, version, icons) {
   const arch = linux.debArchOf();
   if (!arch) die(`--deb: no Debian architecture for ${process.arch}`);
-  let pkg = {};
-  try {
-    pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-  } catch {}
+  const pkg = readPackageJson(dir);
   const { file, deb } = linux.debPackage({ m, dir: out, version, arch, icons: icons.png, pkg });
   const dest = path.join(dir, "build", file);
   fs.writeFileSync(dest, deb);
   info(`built ${path.relative(process.cwd(), dest)} — ${(deb.length / 1024 / 1024).toFixed(1)} MB; installs to /opt/${linux.debNameOf(m)}`);
+}
+
+/** build/<Title>-<version>-<arch>.AppImage from the portable folder. */
+async function makeAppImage(dir, m, out, version, icons) {
+  const arch = linux.appImageArchOf();
+  if (!arch) die(`--appimage: no AppImage runtime for ${process.arch}`);
+  const dest = path.join(dir, "build", linux.appImageNameOf(m, version, arch));
+  const root = path.join(dir, "build", ".AppDir");
+  try {
+    const runtime = await linux.appImageRuntime(arch);
+    linux.appDir({ m, dir: out, root, version, icons: icons.png, pkg: readPackageJson(dir) });
+    linux.appImage(root, runtime, dest);
+  } catch (e) {
+    die(`could not make the AppImage: ${e.stderr?.toString().trim() || e.message}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  info(`built ${path.relative(process.cwd(), dest)} — ${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB`);
 }
 
 /** Sign (and maybe notarize) a built .app; returns how it ended up signed. */
@@ -460,7 +486,8 @@ switch (cmd) {
                           the dev server takes the first free port from N, default 5183)
   kestrel typegen [dir]   regenerate typed native-function stubs
   kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder
-                          elsewhere (--deb on Linux for a Debian package)
+                          elsewhere (on Linux, --deb for a Debian package and
+                          --appimage for an AppImage)
 `);
     process.exit(cmd ? 1 : 0);
 }
