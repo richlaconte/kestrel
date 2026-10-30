@@ -36,18 +36,7 @@
   document.getElementById('save').onclick = async () => {
     const receipt = await nativeCall('saveNote', { text: noteEl.value });
     statusEl.textContent = receipt;
-    await invoke('prove', { payload: 'quick-note saved+loaded via native fns: ' + receipt });
   };
-
-  // headless-demo autopilot: type and save automatically when ?auto is present
-  if (location.search.includes('auto') || true) {
-    setTimeout(async () => {
-      if (!noteEl.value) {
-        noteEl.value = 'Friction-log demo: this note was saved to disk by native.js';
-        document.getElementById('save').click();
-      }
-    }, 1500);
-  }
 </script>
 </body>
 </html>

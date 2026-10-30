@@ -8,8 +8,3 @@ export declare const app: {
     height: number;
   }>;
 };
-
-export declare const store: {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
-};

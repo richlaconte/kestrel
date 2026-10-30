@@ -5,13 +5,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{
-    collections::HashMap,
-    fs,
-    path::PathBuf,
-    sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewUrl, WebviewWindowBuilder};
@@ -48,9 +42,6 @@ fn default_width() -> f64 {
 fn default_height() -> f64 {
     600.0
 }
-
-/// Stand-in for the "store" std-lib module: an in-memory KV per app run.
-struct Kv(Mutex<HashMap<String, String>>);
 
 // ---- native-functions engine (QuickJS on a dedicated thread) ----
 
@@ -203,16 +194,6 @@ fn get_manifest(state: State<Manifest>) -> Manifest {
     state.inner().clone()
 }
 
-#[tauri::command]
-fn kv_set(state: State<Kv>, key: String, value: String) {
-    state.0.lock().unwrap().insert(key, value);
-}
-
-#[tauri::command]
-fn kv_get(state: State<Kv>, key: String) -> Option<String> {
-    state.0.lock().unwrap().get(&key).cloned()
-}
-
 /// Bridge: webview -> user's native function inside the embedded engine.
 /// `async` so Tauri runs it off the main thread: a slow native function must
 /// never freeze painting or input. No timeout: long jobs are legitimate.
@@ -236,30 +217,6 @@ async fn call_native(
         .map_err(|e| e.to_string())?
         .map_err(|_| "native engine stopped".to_string())??;
     serde_json::from_str(&json).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn echo(msg: String) -> String {
-    format!("host echoes: {msg}")
-}
-
-/// Writes an on-disk proof that this app ran IPC against the shared host.
-#[tauri::command]
-fn prove(state: State<Manifest>, payload: String) -> Result<String, String> {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_millis() as u64;
-    let proof = serde_json::json!({
-        "appId": state.app_id,
-        "title": state.title,
-        "payload": payload,
-        "provedAtMs": ts,
-        "host": "kestrel-host 0.1.0 (shared binary, no recompile)",
-    });
-    let path = format!("/tmp/kestrel-proof-{}.json", state.app_id);
-    fs::write(&path, serde_json::to_string_pretty(&proof).unwrap()).map_err(|e| e.to_string())?;
-    Ok(format!("proof written to {path}"))
 }
 
 fn main() {
@@ -322,7 +279,6 @@ fn main() {
     tauri::Builder::default()
         .manage(manifest)
         .manage(engine)
-        .manage(Kv(Mutex::new(HashMap::new())))
         .register_uri_scheme_protocol("kestrel", move |_ctx, request| {
             // Dev mode: reverse-proxy everything to the frontend dev server.
             if let Some(base) = &dev_base {
@@ -382,14 +338,7 @@ fn main() {
                     .unwrap(),
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            get_manifest,
-            kv_set,
-            kv_get,
-            echo,
-            prove,
-            call_native
-        ])
+        .invoke_handler(tauri::generate_handler![get_manifest, call_native])
         .setup(move |app| {
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
@@ -412,6 +361,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     /// Start an engine on `src` and return a caller: name + args JSON → result.
     fn engine(src: &str) -> impl Fn(&str, &str) -> Result<String, String> {
