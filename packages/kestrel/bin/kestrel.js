@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import net from "node:net";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runTypegen, TypegenError } from "../src/typegen.js";
@@ -11,7 +12,7 @@ import { runTypegen, TypegenError } from "../src/typegen.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-const VITE_PORT = 5183;
+const DEFAULT_DEV_PORT = 5183;
 
 const [, , cmd, ...args] = process.argv;
 const flag = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -147,6 +148,18 @@ async function waitForServer(url, timeoutMs = 30000) {
   return false;
 }
 
+/** First port at or above `start` that nothing is listening on. */
+async function freePort(start) {
+  const free = (port) =>
+    new Promise((resolve) => {
+      const srv = net.createServer();
+      srv.once("error", () => resolve(false));
+      srv.listen(port, () => srv.close(() => resolve(true)));
+    });
+  for (let p = start; p < start + 100; p++) if (await free(p)) return p;
+  die(`no free port in ${start}–${start + 99} for the dev server`);
+}
+
 async function dev(dir = ".") {
   dir = path.resolve(dir);
   const m = readManifest(dir);
@@ -166,18 +179,20 @@ async function dev(dir = ".") {
 
   let vite = null;
   if (typeof m.frontend === "object" && m.frontend.dev === "vite") {
-    info(`starting vite on :${VITE_PORT} …`);
+    const port = await freePort(Number(flag("port")) || DEFAULT_DEV_PORT);
+    info(`starting vite on :${port} …`);
     // stdout ignored on purpose: readiness is detected by HTTP poll, and an
     // inherited/piped stdout makes vite EPIPE-crash noisily at shutdown.
-    vite = spawnVite(dir, ["--port", String(VITE_PORT), "--strictPort"], {
+    vite = spawnVite(dir, ["--port", String(port), "--strictPort"], {
       stdio: ["ignore", "ignore", "inherit"],
+      env: { ...process.env, KESTREL_DEV_PORT: String(port) },
     });
-    const up = await waitForServer(`http://localhost:${VITE_PORT}/`);
+    const up = await waitForServer(`http://localhost:${port}/`);
     if (!up) {
       killTree(vite);
       die("vite dev server did not come up (is `npm install` done in the app dir?)");
     }
-    runtime.devUrl = `http://localhost:${VITE_PORT}/`;
+    runtime.devUrl = `http://localhost:${port}/`;
   } else {
     runtime.frontend = path.resolve(dir, typeof m.frontend === "string" ? m.frontend : ".");
   }
@@ -279,7 +294,9 @@ switch (cmd) {
     console.log(`kestrel — just React, actually native  (pre-alpha)
 
   kestrel create <name> [--template=react|vanilla]
-  kestrel dev [dir]       run the app (vite HMR when the template uses it)
+  kestrel dev [dir] [--port=N]
+                          run the app (vite HMR when the template uses it;
+                          the dev server takes the first free port from N, default 5183)
   kestrel typegen [dir]   regenerate typed native-function stubs
   kestrel build [dir]     portable app bundle (unsigned; installers land in Phase 2)
 `);

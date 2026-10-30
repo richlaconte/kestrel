@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import kestrel from "kestreljs/vite";
 
 // A Vite middleware API, the kind a real app uses for mocks: the dev proxy
 // must forward its method, headers and body (#8).
@@ -18,7 +19,6 @@ const echoApi = {
 };
 
 export default defineConfig({
-  plugins: [echoApi],
-  base: "/",
+  plugins: [echoApi, kestrel()],
   build: { target: "es2022" },
 });
