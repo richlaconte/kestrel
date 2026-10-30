@@ -52,11 +52,11 @@ Small on purpose; each module earned its place in the friction log or the plan's
 | Module | v0 surface (abridged) | Notes |
 |---|---|---|
 | `app` | `manifest()`, `version()`, `quit()` | |
-| `window` | `setTitle()`, `minimize()`, `maximize()`, `close()`, `open(url, opts)` | one main window default |
+| `appWindow` | `setTitle()`, `minimize()`, `maximize()`, `close()`, `open(url, opts)` | one main window default; not `window`, which would shadow the DOM global |
 | `fs` | `readText(p)`, `writeText(p, s)`, `readBytes(p)`, `exists(p)`, `appDataDir()` | scope-gated, §6 |
 | `dialog` | `pickFile(opts)`, `pickFolder()`, `save(opts)`, `message(opts)` | native dialogs |
 | `notify` | `notify(title, body?)` | |
-| `store` | `get(k)`, `set(k, v)`, `delete(k)` | durable KV in app-data |
+| `store` | `get(k)`, `set(k, v)`, `delete(k)`, `keys()` | durable KV in app-data; no permission needed |
 | `clipboard` | `readText()`, `writeText(s)` | |
 | `shell` | `open(url)` | opener only; no arbitrary exec in v0 |
 | `tray` | `create({ icon, menu })`, `destroy()` | menu = typed item list |
@@ -144,6 +144,9 @@ docs list every code per call. (Friction item K3: raw Rust panics are not an err
    request/response only? (Tauri events exist under the hood.)
 2. `frontend: { "dev": "vite" }` — blessed Vite integration in v0, or static-only until
    the React template lands?
-3. Is `store` a thin file under app-data (simple, debuggable) or SQLite from day one?
+3. ~~Is `store` a thin file under app-data (simple, debuggable) or SQLite from day one?~~
+   **Decided (#18):** one JSON file, `<app data dir>/.kestrel/store.json`, written through
+   on every change (temp file, fsync, rename), so a resolved `set` survives a crash.
+   SQLite can be a later, opt-in module.
 4. Per-app icon pipeline: one source PNG in the app dir, CLI derives all platform sizes
    at build time — any reason not to?

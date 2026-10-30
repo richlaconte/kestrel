@@ -54,3 +54,9 @@ test("CLI, schema and host agree on the permission names", () => {
   const known = host.match(/pub const KNOWN: &\[&str\] = &\[([^\]]*)\]/)[1];
   assert.deepEqual([...known.matchAll(/"([^"]+)"/g)].map((x) => x[1]), PERMISSIONS);
 });
+
+test("version is an optional non-empty string", () => {
+  assert.deepEqual(validateManifest({ ...ok, version: "1.2.3" }), []);
+  for (const bad of ["", 1])
+    assert.match(validateManifest({ ...ok, version: bad }).join(), /`version` must be a non-empty string/);
+});

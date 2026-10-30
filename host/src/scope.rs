@@ -175,6 +175,11 @@ impl Fs {
         std::fs::read_to_string(&real).map_err(|e| io_err(p, e))
     }
 
+    pub fn read_bytes(&self, p: &str) -> Result<Vec<u8>, KestrelError> {
+        let real = self.resolve(p)?;
+        std::fs::read(&real).map_err(|e| io_err(p, e))
+    }
+
     pub fn write(&self, p: &str, contents: &str) -> Result<(), KestrelError> {
         let real = self.resolve(p)?;
         if let Some(parent) = real.parent() {

@@ -1,6 +1,6 @@
 // kestrel.json validation. Mirrors schema/kestrel.schema.json (published for
 // editor autocomplete), with messages that name the field and the fix.
-const FIELDS = ["$schema", "appId", "title", "width", "height", "frontend", "native", "csp", "permissions"];
+const FIELDS = ["$schema", "appId", "title", "version", "width", "height", "frontend", "native", "csp", "permissions"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
 export const PERMISSIONS = ["fs:app-data", "fs:all"];
@@ -21,6 +21,8 @@ export function validateManifest(m) {
     errs.push(`\`appId\` must be lowercase letters, digits, dots and dashes (got ${JSON.stringify(m.appId)})`);
   if (m.title !== undefined && (typeof m.title !== "string" || !m.title))
     errs.push("`title` must be a non-empty string");
+  if (m.version !== undefined && (typeof m.version !== "string" || !m.version))
+    errs.push('`version` must be a non-empty string, e.g. "1.0.0"');
   for (const k of ["width", "height"])
     if (m[k] !== undefined && !(typeof m[k] === "number" && m[k] > 0))
       errs.push(`\`${k}\` must be a positive number (got ${JSON.stringify(m[k])})`);

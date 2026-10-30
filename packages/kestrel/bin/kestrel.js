@@ -101,6 +101,16 @@ function killTree(child) {
   } catch {}
 }
 
+/** kestrel.json's `version`, else package.json's, for app.version(). */
+function appVersion(dir, m) {
+  if (m.version) return m.version;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
 // ---- create ----------------------------------------------------------------
 function create(name) {
   if (!name) die("usage: kestrel create <app-name> [--template=react|vanilla]");
@@ -187,6 +197,7 @@ async function dev(dir = ".") {
   const runtime = {
     appId: m.appId,
     title: m.title,
+    version: appVersion(dir, m),
     width: m.width,
     height: m.height,
     frontend: dir, // used only in static mode; host requires it either way
@@ -309,6 +320,7 @@ async function build(dir = ".") {
   const runtime = {
     appId: m.appId,
     title: m.title,
+    version: appVersion(dir, m),
     width: m.width,
     height: m.height,
     frontend: "app",
