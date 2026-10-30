@@ -161,7 +161,9 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
                 };
                 let globals = ctx.globals();
                 let dispatch: Function = globals.get("__kestrel_dispatch").map_err(js_err)?;
-                dispatch.call::<_, ()>((name.clone(), args)).map_err(js_err)?;
+                dispatch
+                    .call::<_, ()>((name.clone(), args))
+                    .map_err(js_err)?;
                 Ok(name)
             });
             // Drive promises: run queued jobs until the call settles or no
@@ -405,4 +407,74 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running kestrel-host");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Start an engine on `src` and return a caller: name + args JSON → result.
+    fn engine(src: &str) -> impl Fn(&str, &str) -> Result<String, String> {
+        let dir = std::env::temp_dir().join(format!(
+            "kestrel-engine-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("native.js");
+        fs::write(&script, src).unwrap();
+        let tx = start_native_engine(script);
+        move |name, args| {
+            let (rtx, rrx) = std::sync::mpsc::channel();
+            tx.send((name.into(), args.into(), rtx)).unwrap();
+            rrx.recv().unwrap()
+        }
+    }
+
+    #[test]
+    fn sync_values_round_trip() {
+        let call = engine("native.double = ({ n }) => n * 2; native.nothing = () => {};");
+        assert_eq!(call("double", r#"{"n":21}"#), Ok("42".into()));
+        assert_eq!(call("nothing", "{}"), Ok("null".into()));
+    }
+
+    #[test]
+    fn async_values_resolve() {
+        let call = engine(
+            "native.later = async ({ n }) => { await null; return { n: await Promise.resolve(n) }; };",
+        );
+        assert_eq!(call("later", r#"{"n":7}"#), Ok(r#"{"n":7}"#.into()));
+    }
+
+    #[test]
+    fn errors_carry_the_js_message() {
+        let call = engine(
+            "native.boom = () => { throw new Error('sync'); };
+             native.reject = async () => { throw new Error('async'); };
+             native.rejectValue = () => Promise.reject('plain');",
+        );
+        assert_eq!(call("boom", "{}"), Err("sync".into()));
+        assert_eq!(call("reject", "{}"), Err("async".into()));
+        assert_eq!(call("rejectValue", "{}"), Err("plain".into()));
+        assert_eq!(
+            call("missing", "{}"),
+            Err("no native function: missing".into())
+        );
+    }
+
+    #[test]
+    fn never_settling_promise_errors_and_engine_survives() {
+        let call = engine("native.hang = () => new Promise(() => {}); native.ok = () => 1;");
+        assert!(call("hang", "{}").unwrap_err().contains("never settled"));
+        assert_eq!(call("ok", "{}"), Ok("1".into()));
+    }
+
+    #[test]
+    fn unserializable_result_is_an_error() {
+        let call = engine("native.big = async () => 1n;");
+        assert!(call("big", "{}").is_err());
+    }
 }
