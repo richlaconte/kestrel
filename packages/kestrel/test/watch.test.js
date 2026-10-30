@@ -86,3 +86,15 @@ test("a broken save reports the error and keeps watching (#21)", async (t) => {
   assert.equal(app.run(ok.ok).value(), "fixed");
   assert.match(fs.readFileSync(client, "utf8"), /value\(\): Promise<string>/);
 });
+
+test("an unexpected rebuild failure is reported, not thrown out of a timer", async (t) => {
+  const app = watchApp({ "native.ts": `export function value(): number { return 1; }` });
+  t.after(app.stop);
+  // A directory where the bundle must be written makes esbuild's output fail
+  // in a way that isn't a TypegenError.
+  fs.rmSync(path.join(app.dir, ".kestrel"), { recursive: true });
+  fs.mkdirSync(path.join(app.dir, ".kestrel", "native.compiled.js.tmp"), { recursive: true });
+  await app.write("native.ts", `export function value(): number { return 2; }`);
+  const e = await app.next();
+  assert.match(e.error, /^native rebuild failed: /);
+});
