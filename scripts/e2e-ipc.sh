@@ -14,4 +14,5 @@ cp -R "$REPO_ROOT/scripts/fixtures/ipc/." "$WORK"
 cd "$WORK"
 KESTREL_EXIT_AFTER_MS=15000 "$HOST" kestrel.json
 test -f ipc-results.json || { echo "FAIL: fixture never reported" >&2; exit 1; }
+command -v cygpath >/dev/null 2>&1 && REPO_ROOT="$(cygpath -m "$REPO_ROOT")"
 node "$REPO_ROOT/scripts/fixtures/ipc/assert.mjs" ipc-results.json
