@@ -2025,6 +2025,7 @@ name = "kestrel-host"
 version = "0.1.0"
 dependencies = [
  "dirs 6.0.0",
+ "dlopen2",
  "minreq",
  "percent-encoding",
  "rquickjs",

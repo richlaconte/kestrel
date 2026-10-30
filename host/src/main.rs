@@ -16,6 +16,7 @@ mod scope;
 mod serve;
 mod stdlib;
 mod store;
+mod tray;
 mod window;
 
 use error::KestrelError;
@@ -607,6 +608,7 @@ fn main() {
         .manage(shared.clone())
         .manage(stdlib::WebFs(fs))
         .manage(store::Store::open(&data_dir))
+        .manage(tray::CloseToTray::default())
         .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
             match &dev_base {
                 // Dev: reverse-proxy to the frontend dev server, off the
@@ -631,6 +633,8 @@ fn main() {
             stdlib::window_minimize,
             stdlib::window_maximize,
             stdlib::window_close,
+            stdlib::window_show,
+            stdlib::window_hide,
             stdlib::window_open,
             stdlib::fs_read_text,
             stdlib::fs_read_bytes,
@@ -649,6 +653,8 @@ fn main() {
             stdlib::clipboard_read_text,
             stdlib::clipboard_write_text,
             stdlib::shell_open,
+            tray::tray_create,
+            tray::tray_destroy,
         ])
         .setup(move |app| {
             let _ = app_handle.set(app.handle().clone());
@@ -687,6 +693,17 @@ fn main() {
                 None => builder,
             };
             let main = builder.build()?;
+            // With tray.create({ closeToTray: true }), closing hides the
+            // window, so its page keeps handling tray clicks.
+            let w = main.clone();
+            main.on_window_event(move |e| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                    if tauri::Manager::state::<tray::CloseToTray>(&w).get() {
+                        api.prevent_close();
+                        let _ = w.hide();
+                    }
+                }
+            });
             if let Some(state) = window_state {
                 if saved.is_some_and(|s| s.maximized) {
                     main.maximize()?;
@@ -711,9 +728,21 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while starting kestrel-host")
-        .run(move |_, event| {
-            if let (tauri::RunEvent::Exit, Some(s)) = (event, &saver) {
-                s.save();
+        .run(move |app, event| {
+            let _ = &app; // only macOS uses it
+            match event {
+                tauri::RunEvent::Exit => {
+                    if let Some(s) = &saver {
+                        s.save();
+                    }
+                }
+                // A dock click with every window hidden (closed to the tray).
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen {
+                    has_visible_windows: false,
+                    ..
+                } => tray::show_main(app),
+                _ => {}
             }
         });
 }

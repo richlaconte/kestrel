@@ -40,12 +40,16 @@ const invoke = (cmd, args) => {
  * Subscribe to an event native code sends with `emit`. Returns a function
  * that unsubscribes. Prefer the typed `on` in the generated native-client.
  */
-export const on = (event, cb) => {
+export const on = (event, cb) =>
+  listen("kestrel:native", (p) => {
+    if (p.event === event) cb(p.payload);
+  });
+
+/** Listen to a host event; returns an unsubscribe. Outside a window, a no-op. */
+const listen = (name, cb) => {
   const events = globalThis.window?.__TAURI__?.event;
   if (!events) return () => {};
-  const off = events.listen("kestrel:native", (e) => {
-    if (e.payload.event === event) cb(e.payload.payload);
-  });
+  const off = events.listen(name, (e) => cb(e.payload));
   return () => off.then((f) => f());
 };
 
@@ -66,6 +70,8 @@ export const appWindow = {
   minimize: () => invoke("window_minimize"),
   maximize: () => invoke("window_maximize"),
   close: () => invoke("window_close"),
+  show: () => invoke("window_show"),
+  hide: () => invoke("window_hide"),
   open: (path, opts) => invoke("window_open", { path, opts }),
 };
 
@@ -113,4 +119,21 @@ export const clipboard = {
 /** shell — open an http(s) or mailto link in the default app. Needs "shell:open". */
 export const shell = {
   open: (url) => invoke("shell_open", { url }),
+};
+
+/**
+ * tray — one icon in the menu bar / system tray, with the app's icon and a
+ * menu. Needs "tray". Clicks reach every window's onMenu / onClick.
+ */
+export const tray = {
+  create: (opts) => invoke("tray_create", { opts }),
+  destroy: () => invoke("tray_destroy"),
+  onMenu: (cb) =>
+    listen("kestrel:tray", (p) => {
+      if (p.kind === "menu") cb(p.checked === undefined ? { id: p.id } : { id: p.id, checked: p.checked });
+    }),
+  onClick: (cb) =>
+    listen("kestrel:tray", (p) => {
+      if (p.kind === "click") cb();
+    }),
 };

@@ -58,7 +58,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   calls never block the UI thread, and errors carry the JS message
 - **Manifest permissions scope everything privileged**, in the webview and native code
   alike: `fs:app-data`, `fs:pick` (whatever the user picks in a dialog), `fs:all`,
-  `notifications`, `clipboard`, `shell:open`. `"permissions": ["fs:app-data"]` enables
+  `notifications`, `clipboard`, `shell:open`, `tray`. `"permissions": ["fs:app-data"]` enables
   `fs.readText`, `fs.writeText`, `fs.exists` and `fs.appDataDir` from
   `kestreljs/native/host` (the raw `hostReadFile`, `hostWriteFile`, `hostExists` and
   `hostAppDataDir` globals underneath). Relative paths
@@ -79,8 +79,9 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   writeText/exists/appDataDir` with the same permission scope native code gets; and a
   durable `store` (`get/set/delete/keys`) in `<app data dir>/.kestrel/store.json`,
   saved to disk before each change resolves. Plus native `dialog`s (`pickFile`,
-  `pickFolder`, `save`, `message`), `notify`, `clipboard` text and `shell.open` for
-  web and mail links
+  `pickFolder`, `save`, `message`), `notify`, `clipboard` text, `shell.open` for
+  web and mail links, and a `tray` icon with a menu (`closeToTray` keeps the app
+  running when its window closes)
 - **Each app gets its own webview storage**, even though every app shares the host
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
   keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on
@@ -122,7 +123,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   window uses it in dev too. Apps without one get the Kestrel icon
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-`tray`, Windows and Linux installers, and auto-update. See
+Windows and Linux installers, and auto-update. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

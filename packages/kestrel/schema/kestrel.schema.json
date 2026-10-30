@@ -161,6 +161,10 @@
           {
             "const": "shell:open",
             "description": "Open http, https and mailto links in the default app (shell.open)."
+          },
+          {
+            "const": "tray",
+            "description": "Show an icon and menu in the menu bar or system tray (tray.create, destroy)."
           }
         ]
       }

@@ -9,7 +9,7 @@ const FIELDS = ["$schema", "appId", "title", "version", "bundleId", "icon", "wid
 const TITLE_BAR_STYLES = ["visible", "transparent", "overlay"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
-export const PERMISSIONS = ["fs:app-data", "fs:pick", "fs:all", "notifications", "clipboard", "shell:open"];
+export const PERMISSIONS = ["fs:app-data", "fs:pick", "fs:all", "notifications", "clipboard", "shell:open", "tray"];
 
 /** Return a list of human-readable problems; empty means valid. */
 export function validateManifest(m) {

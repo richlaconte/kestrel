@@ -2,7 +2,7 @@
 // each result or error code, report, then quit. kestrel-native.js is copied in
 // by scripts/e2e-stdlib.sh. With an fs grant the report goes through fs;
 // without one it goes through the store (which needs no permission).
-import { app, appWindow, clipboard, dialog, fs, KestrelError, notify, shell, store } from "./kestrel-native.js";
+import { app, appWindow, clipboard, dialog, fs, KestrelError, notify, shell, store, tray } from "./kestrel-native.js";
 
 const r = {};
 const step = async (name, f) => {
@@ -52,6 +52,35 @@ await step("fromSecond", async () => {
   return "timed out";
 });
 await store.delete("fromSecond");
+
+// #29: a bad menu is refused before any icon exists. With closeToTray,
+// closing the main window hides it, so this page keeps running. Linux
+// without libayatana-appindicator3 refuses with unsupported_platform.
+await step("trayBad", () => tray.create({ menu: [{ id: "a", label: "A" }, { id: "a", label: "B" }] }));
+await step("trayCreate", () =>
+  tray.create({
+    tooltip: "e2e",
+    closeToTray: true,
+    menu: [
+      { id: "show", label: "Show" },
+      { id: "mute", label: "Mute", checked: true },
+      { type: "separator" },
+      { label: "More", items: [{ id: "about", label: "About", enabled: false }] },
+    ],
+  }),
+);
+await step("hide", () => appWindow.hide());
+await step("show", () => appWindow.show());
+if (r.trayCreate === null) {
+  await step("closeToTray", async () => {
+    await appWindow.close();
+    await new Promise((res) => setTimeout(res, 500));
+    await appWindow.show();
+    return "still running";
+  });
+}
+await step("trayDestroy", () => tray.destroy());
+await step("trayDestroyAgain", () => tray.destroy());
 
 // Only when ungranted: a real notification needs a bundled app on macOS.
 if (!permissions.includes("fs:app-data")) await step("notify", () => notify("e2e"));
