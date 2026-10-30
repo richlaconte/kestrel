@@ -7,6 +7,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
 import {
+  appDir, appImage, appImageArchOf, appImageNameOf, appImageRuntime,
   ar, controlFile, debArchOf, debNameOf, debPackage, debVersionOf, desktopEntry, maintainerOf, tar,
 } from "../src/linux.js";
 
@@ -183,4 +184,88 @@ test("dpkg-deb accepts the package", { skip: !hasDpkg && "no dpkg-deb here" }, (
   const list = execFileSync("dpkg-deb", ["--contents", f]).toString();
   assert.match(list, /\.\/usr\/bin\/my-app -> \/opt\/my-app\/My_App/);
   fs.rmSync(dir, { recursive: true });
+});
+
+// ---- AppImage ----
+
+test("AppImage names and architectures", () => {
+  assert.equal(appImageArchOf("x64"), "x86_64");
+  assert.equal(appImageArchOf("arm64"), "aarch64");
+  assert.equal(appImageArchOf("ia32"), null);
+  assert.equal(appImageNameOf({ title: "My Notes!", appId: "n" }, "1.0.0", "x86_64"), "My-Notes-1.0.0-x86_64.AppImage");
+  assert.equal(appImageNameOf({ title: "日本", appId: "jp" }, "1", "aarch64"), "jp-1-aarch64.AppImage");
+});
+
+test("the AppImage runtime is verified, cached, and overridable", async () => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-rt-"));
+  const good = Buffer.from("\x7fELF runtime");
+  const pins = { x86_64: crypto.createHash("sha256").update(good).digest("hex") };
+  let fetched = [];
+  const fetchImpl = async (url) => (fetched.push(url), { ok: true, arrayBuffer: async () => good });
+  const opts = { env: {}, cacheDir, fetchImpl, pins };
+
+  assert.deepEqual(await appImageRuntime("x86_64", opts), good);
+  assert.match(fetched[0], /type2-runtime\/releases\/download\/\d+\/runtime-x86_64$/);
+  assert.deepEqual(await appImageRuntime("x86_64", opts), good, "second time from the cache");
+  assert.equal(fetched.length, 1);
+
+  fs.writeFileSync(fs.readdirSync(cacheDir).map((f) => path.join(cacheDir, f))[0], "tampered");
+  await assert.rejects(appImageRuntime("x86_64", opts), /doesn't match the pinned SHA-256/);
+
+  const bad = { ...opts, cacheDir: path.join(cacheDir, "fresh"), fetchImpl: async () => ({ ok: true, arrayBuffer: async () => Buffer.from("evil") }) };
+  await assert.rejects(appImageRuntime("x86_64", bad), /doesn't match/);
+  assert.equal(fs.existsSync(bad.cacheDir), false, "a bad download is never cached");
+  await assert.rejects(appImageRuntime("x86_64", { ...bad, fetchImpl: async () => ({ ok: false, status: 404 }) }), /HTTP 404/);
+
+  const local = path.join(cacheDir, "runtime");
+  fs.writeFileSync(local, good);
+  assert.deepEqual(await appImageRuntime("x86_64", { ...opts, env: { KESTREL_APPIMAGE_RUNTIME: local }, fetchImpl: null }), good);
+  await assert.rejects(appImageRuntime("riscv64", opts), /no AppImage runtime/);
+  fs.rmSync(cacheDir, { recursive: true });
+});
+
+test("appDir lays out AppRun, the desktop entry and icons", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-appdir-"));
+  const dir = path.join(tmp, "portable");
+  fs.mkdirSync(path.join(dir, "app"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "My_App"), "ELF");
+  fs.writeFileSync(path.join(dir, "app", "index.html"), "x");
+  const root = path.join(tmp, "AppDir");
+  const icons = { 16: Buffer.from("p16"), 256: Buffer.from("p256"), 1024: Buffer.from("p1024") };
+  appDir({ m, dir, root, version: "1.2.0", icons, pkg: { description: "Notes" } });
+  assert.equal(fs.readlinkSync(path.join(root, "AppRun")), "usr/lib/my-app/My_App");
+  assert.equal(fs.readFileSync(path.join(root, "AppRun"), "utf8"), "ELF", "AppRun resolves to the host");
+  const entry = fs.readFileSync(path.join(root, "my-app.desktop"), "utf8");
+  assert.match(entry, /\nExec=my-app\n/);
+  assert.match(entry, /\nX-AppImage-Version=1\.2\.0\n/);
+  assert.equal(fs.readFileSync(path.join(root, ".DirIcon"), "utf8"), "p256");
+  assert.equal(fs.readFileSync(path.join(root, "usr/share/icons/hicolor/16x16/apps/my-app.png"), "utf8"), "p16");
+  assert.equal(fs.existsSync(path.join(root, "usr/share/icons/hicolor/1024x1024")), false);
+  assert.ok(fs.existsSync(path.join(root, "usr/lib/my-app/app/index.html")));
+  fs.rmSync(tmp, { recursive: true });
+});
+
+const hasMksquashfs = (() => {
+  try {
+    execFileSync("mksquashfs", ["-version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test("appImage is the runtime followed by a squashfs image", { skip: !hasMksquashfs && "no mksquashfs here" }, () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-appimage-"));
+  const root = path.join(tmp, "AppDir");
+  fs.mkdirSync(root);
+  fs.writeFileSync(path.join(root, "AppRun"), "x");
+  const runtime = Buffer.from("RUNTIME!");
+  const out = path.join(tmp, "x.AppImage");
+  appImage(root, runtime, out);
+  const b = fs.readFileSync(out);
+  assert.deepEqual(b.subarray(0, 8), runtime);
+  assert.equal(b.subarray(8, 12).toString(), "hsqs", "squashfs magic right after the runtime");
+  assert.equal(fs.statSync(out).mode & 0o111, 0o111, "executable");
+  assert.equal(fs.existsSync(`${out}.squashfs`), false, "no leftovers");
+  fs.rmSync(tmp, { recursive: true });
 });

@@ -56,7 +56,7 @@ fi
 # Both templates: the vanilla one builds from "frontend": ".", which holds
 # build/ itself.
 echo "== build =="
-$KESTREL build . --dmg --deb # --dmg: macOS only, --deb: Linux only
+$KESTREL build . --dmg --deb --appimage # --dmg: macOS only; --deb, --appimage: Linux only
 for f in icon.icns icon.ico 16x16.png 256x256.png 1024x1024.png; do
   test -s "build/icons/$f" || { echo "FAIL: build/icons/$f missing" >&2; exit 1; }
 done
@@ -86,6 +86,22 @@ test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -
 echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
 rm_tree "$FOREIGN"
 
+visits() { node -p 'require(process.argv[1]).visits' "$DATA/kestrel-data.json"; }
+
+# Linux (#26): the AppImage runs. With FUSE it mounts itself; without (some
+# CI runners), it unpacks to a temp dir and runs from there.
+if [ "$(uname)" = Linux ]; then
+  echo "== run the AppImage =="
+  IMG="$(ls build/*.AppImage)"
+  test -x "$IMG"
+  before=$(visits)
+  if [ -e /dev/fuse ] && command -v fusermount3 >/dev/null; then MODE=mounted; else MODE=extracted; export APPIMAGE_EXTRACT_AND_RUN=1; fi
+  ( cd / && KESTREL_EXIT_AFTER_MS=12000 "$WORK/smoke-app/$IMG" )
+  unset APPIMAGE_EXTRACT_AND_RUN
+  [ "$(visits)" -eq $((before + 1)) ] || { echo "FAIL: the AppImage's IPC never ran" >&2; exit 1; }
+  echo "OK: $(basename "$IMG") runs ($MODE)"
+fi
+
 # Linux (#26): the .deb installs, runs from /usr/bin and uninstalls. Needs
 # dpkg and password-less sudo, as on CI runners.
 if [ "$(uname)" = Linux ] && command -v dpkg >/dev/null && sudo -n true 2>/dev/null; then
@@ -97,8 +113,9 @@ if [ "$(uname)" = Linux ] && command -v dpkg >/dev/null && sudo -n true 2>/dev/n
   test -x /opt/smoke-app/smoke-app
   grep -q '^Exec=/usr/bin/smoke-app$' /usr/share/applications/smoke-app.desktop
   test -s /usr/share/icons/hicolor/256x256/apps/smoke-app.png
+  before=$(visits)
   ( cd / && KESTREL_EXIT_AFTER_MS=12000 smoke-app )
-  grep -q '"visits": *3' "$DATA/kestrel-data.json" || { echo "FAIL: the installed app's IPC never ran" >&2; exit 1; }
+  [ "$(visits)" -eq $((before + 1)) ] || { echo "FAIL: the installed app's IPC never ran" >&2; exit 1; }
   sudo dpkg -r smoke-app
   test ! -e /opt/smoke-app || { echo "FAIL: dpkg -r left /opt/smoke-app" >&2; exit 1; }
   echo "OK: $(basename "$DEB") installs, runs from /usr/bin and uninstalls"

@@ -117,7 +117,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   native module. It's signed ad hoc, or for distribution and notarized when you give it
   Apple credentials; `--dmg` adds a disk image. See
   [docs/SHIPPING-MACOS.md](docs/SHIPPING-MACOS.md). On Linux, `--deb` makes a Debian
-  package with an app-menu entry and icons
+  package with an app-menu entry and icons, and `--appimage` a single-file AppImage
   ([docs/SHIPPING-LINUX.md](docs/SHIPPING-LINUX.md)). On Windows and Linux it also makes
   a portable folder that runs from any directory
 - **One icon, every size:** point `icon` in `kestrel.json` at a square PNG (1024×1024 is
@@ -125,7 +125,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   window uses it in dev too. Apps without one get the Kestrel icon
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-a Windows installer, AppImage, and auto-update. See
+a Windows installer and auto-update. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

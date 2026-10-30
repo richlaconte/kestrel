@@ -1,6 +1,7 @@
-// Linux packaging for `kestrel build --deb` (#26): a .deb written in plain
+// Linux packaging for `kestrel build` (#26). `--deb`: a .deb written in plain
 // Node (ar, tar and gzip over node:zlib), so any Linux machine or CI runner
-// can make one without dpkg-deb.
+// can make one without dpkg-deb. `--appimage`: one file for any distro,
+// made with mksquashfs and the AppImage runtime (see the end of this file).
 //
 // The app installs to /opt/<name>/ (the portable folder as is), with
 // /usr/bin/<name> linking to it, a .desktop entry, and the icon in every
@@ -10,6 +11,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
+import { execFileSync } from "node:child_process";
 
 /** Debian package names: lowercase letters, digits, `+ - .`, starting alphanumeric. */
 export function debNameOf(m) {
@@ -40,17 +42,21 @@ export function maintainerOf(pkg, m) {
 
 const oneLine = (s) => String(s).replace(/[\r\n]+/g, " ").trim();
 
-/** The `.desktop` entry the app menu reads. */
-export function desktopEntry(m, { name, comment }) {
+/**
+ * The `.desktop` entry the app menu reads. `exec` defaults to the /usr/bin
+ * link the .deb installs; `extra` adds keys (an AppImage's version).
+ */
+export function desktopEntry(m, { name, comment, exec = `/usr/bin/${name}`, extra = {} }) {
   return [
     "[Desktop Entry]",
     "Type=Application",
     `Name=${oneLine(m.title)}`,
     ...(comment ? [`Comment=${oneLine(comment)}`] : []),
-    `Exec=/usr/bin/${name}`,
+    `Exec=${exec}`,
     `Icon=${name}`,
     "Terminal=false",
     "Categories=Utility;",
+    ...Object.entries(extra).map(([k, v]) => `${k}=${oneLine(v)}`),
     "",
   ].join("\n");
 }
@@ -231,4 +237,91 @@ export function debPackage({ m, dir, version, arch, icons, pkg = {}, mtime = Mat
     mtime,
   );
   return { name, version: debVersion, file: `${name}_${debVersion}_${arch}.deb`, deb };
+}
+
+// ---- AppImage ----
+// An AppImage is the AppImage runtime (a small static ELF that mounts or
+// unpacks what follows it) with a squashfs image of an AppDir appended.
+// The runtime is downloaded once, checked against a pinned SHA-256, and
+// cached; KESTREL_APPIMAGE_RUNTIME names a local copy instead (offline).
+
+export const RUNTIME_RELEASE = "20251108";
+const RUNTIME_SHA256 = {
+  x86_64: "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
+  aarch64: "00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444",
+};
+
+/** The AppImage runtime's name for the CPU, or null for one we don't pin. */
+export const appImageArchOf = (arch = process.arch) => ({ x64: "x86_64", arm64: "aarch64" })[arch] ?? null;
+
+/** A file name for the AppImage: the title with spaces as dashes. */
+export const appImageNameOf = (m, version, arch) =>
+  `${m.title.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || m.appId}-${version}-${arch}.AppImage`;
+
+const sha256 = (b) => crypto.createHash("sha256").update(b).digest("hex");
+
+/**
+ * The runtime for `arch`, verified. Uses KESTREL_APPIMAGE_RUNTIME if set,
+ * else the cache, else downloads it into the cache.
+ */
+export async function appImageRuntime(arch, { env = process.env, cacheDir, fetchImpl = fetch, pins = RUNTIME_SHA256 } = {}) {
+  const want = pins[arch];
+  if (!want) throw new Error(`no AppImage runtime for ${arch}`);
+  const check = (b, from) => {
+    if (sha256(b) !== want)
+      throw new Error(`the AppImage runtime from ${from} doesn't match the pinned SHA-256 for runtime-${arch} ${RUNTIME_RELEASE}`);
+    return b;
+  };
+  if (env.KESTREL_APPIMAGE_RUNTIME) return check(fs.readFileSync(env.KESTREL_APPIMAGE_RUNTIME), env.KESTREL_APPIMAGE_RUNTIME);
+  const dir = cacheDir ?? path.join(env.XDG_CACHE_HOME || path.join(env.HOME || "/tmp", ".cache"), "kestrel");
+  const cached = path.join(dir, `appimage-runtime-${RUNTIME_RELEASE}-${arch}`);
+  if (fs.existsSync(cached)) return check(fs.readFileSync(cached), cached);
+  const url = `https://github.com/AppImage/type2-runtime/releases/download/${RUNTIME_RELEASE}/runtime-${arch}`;
+  const res = await fetchImpl(url);
+  if (!res.ok) throw new Error(`downloading ${url}: HTTP ${res.status}`);
+  const b = check(Buffer.from(await res.arrayBuffer()), url);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(cached, b);
+  return b;
+}
+
+/**
+ * Lay out an AppDir at `root` for the portable folder `dir`: the app in
+ * usr/lib/<name>/, AppRun linking to its executable (the host finds its
+ * manifest through /proc/self/exe), and the desktop entry and icon at the
+ * top, where AppImage tools look for them.
+ */
+export function appDir({ m, dir, root, version, icons, pkg = {} }) {
+  const name = debNameOf(m);
+  fs.rmSync(root, { recursive: true, force: true });
+  const lib = path.join(root, "usr", "lib", name);
+  fs.mkdirSync(path.dirname(lib), { recursive: true });
+  fs.cpSync(dir, lib, { recursive: true, verbatimSymlinks: true });
+  fs.symlinkSync(`usr/lib/${name}/${m.appId}`, path.join(root, "AppRun"));
+  const entry = desktopEntry(m, { name, comment: pkg.description, exec: name, extra: { "X-AppImage-Version": version } });
+  fs.writeFileSync(path.join(root, `${name}.desktop`), entry);
+  fs.writeFileSync(path.join(root, `${name}.png`), icons[256]);
+  fs.symlinkSync(`${name}.png`, path.join(root, ".DirIcon"));
+  for (const [s, png] of Object.entries(icons).filter(([s]) => Number(s) <= 512)) {
+    const d = path.join(root, "usr", "share", "icons", "hicolor", `${s}x${s}`, "apps");
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, `${name}.png`), png);
+  }
+}
+
+/** Squash `root` and put `runtime` in front of it: the finished AppImage at `out`. */
+export function appImage(root, runtime, out) {
+  try {
+    execFileSync("mksquashfs", ["-version"], { stdio: "ignore" });
+  } catch {
+    throw new Error("--appimage needs mksquashfs: install squashfs-tools (apt install squashfs-tools)");
+  }
+  const img = `${out}.squashfs`;
+  fs.rmSync(img, { force: true });
+  execFileSync("mksquashfs", [root, img, "-root-owned", "-noappend", "-comp", "gzip", "-quiet"], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  fs.writeFileSync(out, Buffer.concat([runtime, fs.readFileSync(img)]));
+  fs.chmodSync(out, 0o755);
+  fs.rmSync(img);
 }
