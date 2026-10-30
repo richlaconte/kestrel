@@ -5,7 +5,11 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 mod serve;
 
@@ -65,7 +69,7 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
         let rt = Runtime::new().expect("quickjs runtime");
         let context = Context::full(&rt).expect("quickjs context");
 
-        context.with(|ctx| {
+        let load_error: Option<String> = context.with(|ctx| {
             let globals = ctx.globals();
             // Host bindings: the privileged surface native functions may touch.
             globals
@@ -136,14 +140,38 @@ fn start_native_engine(script_path: PathBuf) -> std::sync::mpsc::Sender<NativeCa
             )
             .expect("prelude");
 
-            let user_src = std::fs::read_to_string(&script_path).expect("read native module");
-            if let Err(e) = ctx.eval::<(), _>(user_src) {
-                let detail = format!("{:?}", ctx.catch());
-                panic!("eval native module: {e}: {detail}");
+            // A broken module must not take the engine down: report it once
+            // and reject every call with the same message.
+            let file = script_path.display();
+            let user_src = match std::fs::read_to_string(&script_path) {
+                Ok(src) => src,
+                Err(e) => return Some(format!("cannot read native module {file}: {e}")),
+            };
+            match ctx.eval::<(), _>(user_src) {
+                Ok(()) => None,
+                Err(e) => {
+                    let exc = ctx.catch();
+                    let exc = exc.as_exception();
+                    let msg = exc
+                        .and_then(|x| x.message())
+                        .unwrap_or_else(|| e.to_string());
+                    let at = exc
+                        .and_then(|x| x.line())
+                        .map(|l| format!("{file}:{l}"))
+                        .unwrap_or_else(|| file.to_string());
+                    Some(format!("native module failed to load ({at}): {msg}"))
+                }
             }
         });
+        if let Some(err) = &load_error {
+            eprintln!("kestrel-host: error: {err}");
+        }
 
         while let Ok((name, args, reply)) = rx.recv() {
+            if let Some(err) = &load_error {
+                let _ = reply.send(Err(err.clone()));
+                continue;
+            }
             let res = context.with(|ctx| -> Result<String, String> {
                 let js_err = |e: rquickjs::Error| {
                     // Surface the JS exception message when there is one.
@@ -221,21 +249,79 @@ async fn call_native(
     serde_json::from_str(&json).map_err(|e| e.to_string())
 }
 
+/// A loaded manifest with every path resolved and checked.
+struct Prepared {
+    manifest: Manifest,
+    frontend_dir: PathBuf,
+}
+
+/// Load and validate the manifest. Errors are single-line and name the file
+/// and the field to fix: they are the user's first contact with a mistake.
+fn prepare(manifest_path: &Path) -> Result<Prepared, String> {
+    let shown = manifest_path.display();
+    let raw = fs::read_to_string(manifest_path).map_err(|e| {
+        format!(
+            "cannot read manifest {shown}: {e}. Pass the path to kestrel.json, \
+             or put kestrel.json next to the executable."
+        )
+    })?;
+    let mut manifest: Manifest =
+        serde_json::from_str(&raw).map_err(|e| format!("invalid manifest {shown}: {e}"))?;
+
+    // Relative paths in the manifest resolve against the manifest's own
+    // directory, never the process cwd.
+    let manifest_dir = manifest_path
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .ok_or_else(|| format!("cannot resolve the directory of {shown}"))?;
+
+    let frontend_dir = manifest_dir
+        .join(&manifest.frontend)
+        .canonicalize()
+        .map_err(|e| {
+            format!(
+                "frontend directory `{}` (from {shown}) not found: {e}. \
+                 Check the `frontend` field.",
+                manifest.frontend
+            )
+        })?;
+    if manifest.dev_url.is_none() && !frontend_dir.join("index.html").is_file() {
+        return Err(format!(
+            "no index.html in frontend directory {} (from {shown}). \
+             Build the frontend first, or check the `frontend` field.",
+            frontend_dir.display()
+        ));
+    }
+    if let Some(n) = &manifest.native {
+        let p = manifest_dir.join(n).canonicalize().map_err(|e| {
+            format!("native module `{n}` (from {shown}) not found: {e}. Check the `native` field.")
+        })?;
+        manifest.native = Some(p.to_string_lossy().into_owned());
+    }
+    Ok(Prepared {
+        manifest,
+        frontend_dir,
+    })
+}
+
 fn main() {
     // Manifest location: argv[1], else kestrel.json BESIDE THE EXECUTABLE —
     // a built bundle must work when double-clicked from any cwd.
     let manifest_path: PathBuf = match std::env::args().nth(1) {
         Some(p) => PathBuf::from(p),
         None => std::env::current_exe()
-            .expect("current_exe")
-            .parent()
-            .expect("exe dir")
-            .join("kestrel.json"),
+            .ok()
+            .and_then(|exe| exe.parent().map(|d| d.join("kestrel.json")))
+            .unwrap_or_else(|| PathBuf::from("kestrel.json")),
     };
-    let raw = fs::read_to_string(&manifest_path)
-        .unwrap_or_else(|e| panic!("cannot read manifest {}: {e}", manifest_path.display()));
-    let mut manifest: Manifest =
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("invalid manifest: {e}"));
+    let Prepared {
+        mut manifest,
+        frontend_dir,
+    } = prepare(&manifest_path).unwrap_or_else(|e| {
+        eprintln!("kestrel-host: error: {e}");
+        std::process::exit(1);
+    });
 
     // Test hook for headless CI runs of built bundles.
     if let Ok(ms) = std::env::var("KESTREL_EXIT_AFTER_MS") {
@@ -244,37 +330,14 @@ fn main() {
         }
     }
 
-    // Relative paths in the manifest resolve against the manifest's own
-    // directory, never the process cwd.
-    let manifest_dir = manifest_path
-        .canonicalize()
-        .unwrap_or_else(|e| panic!("manifest path: {e}"))
-        .parent()
-        .expect("manifest dir")
-        .to_path_buf();
-
-    let frontend_dir: PathBuf = manifest_dir
-        .join(&manifest.frontend)
-        .canonicalize()
-        .unwrap_or_else(|e| panic!("frontend dir {}: {e}", manifest.frontend));
-    if let Some(n) = &manifest.native {
-        manifest.native = Some(
-            manifest_dir
-                .join(n)
-                .canonicalize()
-                .unwrap_or_else(|e| panic!("native module {n}: {e}"))
-                .to_string_lossy()
-                .into_owned(),
-        );
-    }
     let dev_base = manifest.dev_url.clone();
 
-    let engine = NativeEngine(manifest.native.as_ref().map(|p| {
-        let script = PathBuf::from(p)
-            .canonicalize()
-            .unwrap_or_else(|e| panic!("native module {p}: {e}"));
-        Mutex::new(start_native_engine(script))
-    }));
+    let engine = NativeEngine(
+        manifest
+            .native
+            .as_ref()
+            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p)))),
+    );
 
     let window_cfg = manifest.clone();
 
@@ -374,6 +437,92 @@ mod tests {
         let call = engine("native.hang = () => new Promise(() => {}); native.ok = () => 1;");
         assert!(call("hang", "{}").unwrap_err().contains("never settled"));
         assert_eq!(call("ok", "{}"), Ok("1".into()));
+    }
+
+    #[test]
+    fn broken_module_rejects_calls_with_file_and_line() {
+        let call = engine("native.ok = () => 1;\nnative.bad = (;\n");
+        let err = call("ok", "{}").unwrap_err();
+        assert!(err.contains("native module failed to load"), "{err}");
+        assert!(err.contains("native.js:2"), "{err}");
+        // The engine stays up and keeps answering.
+        assert_eq!(call("ok", "{}"), Err(err));
+    }
+
+    #[test]
+    fn module_that_throws_at_load_is_reported() {
+        let call = engine("throw new Error('boot failed');");
+        let err = call("x", "{}").unwrap_err();
+        assert!(err.contains("boot failed"), "{err}");
+    }
+
+    /// Write files into a fresh dir and return it.
+    fn app(files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "kestrel-prepare-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for (name, body) in files {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, body).unwrap();
+        }
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn prepare_err(dir: &Path) -> String {
+        match prepare(&dir.join("kestrel.json")) {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => e,
+        }
+    }
+
+    const OK: &str = r#"{"appId":"a","title":"A","frontend":"web","native":"native.js"}"#;
+
+    #[test]
+    fn prepare_accepts_a_valid_app_and_resolves_paths() {
+        let dir = app(&[
+            ("kestrel.json", OK),
+            ("web/index.html", ""),
+            ("native.js", ""),
+        ]);
+        let p = prepare(&dir.join("kestrel.json")).unwrap();
+        assert!(p.frontend_dir.is_absolute());
+        assert!(Path::new(p.manifest.native.as_deref().unwrap()).is_absolute());
+    }
+
+    #[test]
+    fn prepare_reports_each_failure_mode() {
+        let missing = app(&[]);
+        assert!(prepare_err(&missing).starts_with("cannot read manifest"));
+
+        let bad_json = app(&[("kestrel.json", "{ nope")]);
+        assert!(prepare_err(&bad_json).contains("invalid manifest"));
+
+        let no_field = app(&[("kestrel.json", r#"{"title":"A","frontend":"."}"#)]);
+        assert!(prepare_err(&no_field).contains("missing field `appId`"));
+
+        let no_frontend = app(&[("kestrel.json", OK), ("native.js", "")]);
+        let e = prepare_err(&no_frontend);
+        assert!(
+            e.contains("frontend directory `web`") && e.contains("`frontend` field"),
+            "{e}"
+        );
+
+        let no_index = app(&[("kestrel.json", OK), ("web/x.css", ""), ("native.js", "")]);
+        assert!(prepare_err(&no_index).contains("no index.html"));
+
+        let no_native = app(&[("kestrel.json", OK), ("web/index.html", "")]);
+        let e = prepare_err(&no_native);
+        assert!(
+            e.contains("native module `native.js`") && e.contains("`native` field"),
+            "{e}"
+        );
     }
 
     #[test]

@@ -10,7 +10,8 @@
   "exports": {
     "./vite": "./src/vite.js",
     "./bin/kestrel.js": "./bin/kestrel.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./schema/kestrel.schema.json": "./schema/kestrel.schema.json"
   },
   "engines": {
     "node": ">=18"
@@ -25,6 +26,7 @@
   "homepage": "https://github.com/richlaconte/kestrel",
   "files": [
     "bin",
+    "schema",
     "src",
     "templates"
   ],

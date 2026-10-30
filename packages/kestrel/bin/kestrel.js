@@ -8,6 +8,7 @@ import net from "node:net";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runTypegen, TypegenError } from "../src/typegen.js";
+import { validateManifest } from "../src/manifest.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -28,11 +29,17 @@ function readManifest(dir) {
   const p = path.join(dir, "kestrel.json");
   if (!fs.existsSync(p))
     die(`no kestrel.json in ${dir} — is this a kestrel app? (try: kestrel create my-app)`);
+  let m;
   try {
-    return JSON.parse(fs.readFileSync(p, "utf8"));
+    m = JSON.parse(fs.readFileSync(p, "utf8"));
   } catch (e) {
     die(`kestrel.json is not valid JSON: ${e.message}`);
   }
+  const errs = validateManifest(m);
+  if (errs.length) die(`problems in ${p}:\n${errs.map((e) => `  - ${e}`).join("\n")}`);
+  if (m.native && !fs.existsSync(path.resolve(dir, m.native)))
+    die(`\`native\` points at ${m.native}, which doesn't exist (in ${dir})`);
+  return m;
 }
 
 // Prebuilt host from the platform package npm installed alongside kestreljs
@@ -105,7 +112,11 @@ function create(name) {
 
   const mPath = path.join(dest, "kestrel.json");
   const m = JSON.parse(fs.readFileSync(mPath, "utf8"));
-  m.appId = name.replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+  m.appId =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^[^a-z0-9]+/, "") || "app";
   m.title = name;
   fs.writeFileSync(mPath, JSON.stringify(m, null, 2) + "\n");
 

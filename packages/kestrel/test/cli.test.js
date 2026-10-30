@@ -28,6 +28,31 @@ for (const template of ["react", "vanilla"]) {
   });
 }
 
+test("create derives a valid appId from awkward names", () => {
+  const cwd = tmp();
+  assert.equal(run(["create", "_Weird Name!", "--template=vanilla"], cwd).status, 0);
+  const m = JSON.parse(fs.readFileSync(path.join(cwd, "_Weird Name!", "kestrel.json"), "utf8"));
+  assert.equal(m.appId, "weird-name-");
+});
+
+test("an invalid manifest lists every problem before anything launches", () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "Bad Id", frontend: 3 }));
+  const res = run(["dev", dir]);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /`appId` must be lowercase/);
+  assert.match(res.stderr, /`title` is required/);
+  assert.match(res.stderr, /`frontend` must be a directory path/);
+});
+
+test("a missing native module is caught before launch", () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
+  const res = run(["typegen", dir]);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /`native` points at native\.ts, which doesn't exist/);
+});
+
 test("create refuses to overwrite an existing directory", () => {
   const cwd = tmp();
   fs.mkdirSync(path.join(cwd, "taken"));
@@ -44,7 +69,7 @@ test("typegen outside an app explains what's missing", () => {
 
 test("typegen reports a user error in native.ts without a stack trace", () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ native: "native.ts" }));
+  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
   fs.writeFileSync(path.join(dir, "native.ts"), "interface X { a: number }\nexport function f(args: X): number { return 1; }\n");
   const res = run(["typegen", dir]);
   assert.equal(res.status, 1);
@@ -54,7 +79,7 @@ test("typegen reports a user error in native.ts without a stack trace", () => {
 
 test("typegen warns about non-function exports", () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ native: "native.ts" }));
+  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
   fs.writeFileSync(path.join(dir, "native.ts"), "export const V = 1;\nexport function f(): number { return 1; }\n");
   const res = run(["typegen", dir]);
   assert.equal(res.status, 0);
