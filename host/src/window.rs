@@ -1,5 +1,5 @@
-// Window options from the manifest (#23), and remembering the main window's
-// size and position between runs.
+// Window options from the manifest (#23), the policy every app window shares,
+// and remembering the main window's size and position between runs.
 //
 // The state lives in `<data dir>/.kestrel/window.json`. Moves and resizes
 // update it in memory; a saver thread writes it once they stop, and once more
@@ -14,7 +14,88 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{Runtime, WebviewWindow, WebviewWindowBuilder};
+use tauri::{Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+use crate::{error::KestrelError, serve};
+
+/// The app's webview storage, shared by all its windows.
+#[derive(Clone)]
+pub struct Storage {
+    pub dir: PathBuf,
+    pub store_id: [u8; 16],
+}
+
+/// A window showing `url` with the policy every app window gets: the app's
+/// own storage, and a lock that keeps it on the app.
+pub fn app_window<'a, R: Runtime, M: tauri::Manager<R>>(
+    manager: &'a M,
+    label: &str,
+    url: tauri::Url,
+    storage: &Storage,
+) -> WebviewWindowBuilder<'a, R, M> {
+    WebviewWindowBuilder::new(manager, label, WebviewUrl::External(url))
+        // Every app shares this binary and the kestrel://localhost
+        // origin, so storage must be split per app explicitly:
+        // a data directory on Windows/Linux, a data store on macOS
+        // (14+; older macOS falls back to the shared default store).
+        .data_directory(storage.dir.clone())
+        .data_store_identifier(storage.store_id)
+        // The window only ever shows the app. External links open
+        // in the system browser; anything else is refused.
+        .on_navigation(|url| {
+            if serve::is_app_url(url) || url.scheme() == "about" {
+                return true;
+            }
+            if let Err(e) = serve::open_external(url) {
+                eprintln!("kestrel-host: {e}");
+            }
+            false
+        })
+        .on_new_window(|url, _| {
+            if !serve::is_app_url(&url) {
+                if let Err(e) = serve::open_external(&url) {
+                    eprintln!("kestrel-host: {e}");
+                }
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
+}
+
+/// The URL of one of the app's pages, from a path like "/settings" or
+/// "about.html". Anything off the app (another site, `//host`, `file:`)
+/// is refused: only the app's own pages may run with IPC.
+pub fn app_page(path: &str) -> Result<tauri::Url, KestrelError> {
+    let base: tauri::Url = "kestrel://localhost/".parse().expect("valid base");
+    let refuse = || {
+        KestrelError::new(
+            "permission_denied",
+            format!(
+                "appWindow.open only opens the app's own pages, like \"/settings\" (got {path:?}). \
+                 Use shell.open for links."
+            ),
+        )
+    };
+    let url = match tauri::Url::parse(path) {
+        // Already a full app URL: keep its path, query and fragment.
+        Ok(u) if serve::is_app_url(&u) => {
+            let mut rest = u.path().to_string();
+            if let Some(q) = u.query() {
+                rest += &format!("?{q}");
+            }
+            if let Some(f) = u.fragment() {
+                rest += &format!("#{f}");
+            }
+            base.join(&rest)
+        }
+        Ok(_) => return Err(refuse()),
+        Err(_) => base.join(path),
+    }
+    .map_err(|_| refuse())?;
+    if url.scheme() != "kestrel" || url.host_str() != Some("localhost") {
+        return Err(refuse());
+    }
+    Ok(url)
+}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -263,6 +344,35 @@ mod tests {
         assert!(reachable(at(2000.0, 100.0), &[DISPLAY, right]));
         assert!(!reachable(at(2000.0, 100.0), &[DISPLAY]));
         assert!(!reachable(at(100.0, 100.0), &[]));
+    }
+
+    #[test]
+    fn app_page_allows_only_the_apps_own_pages() {
+        let ok = |p: &str| app_page(p).map(|u| u.to_string()).map_err(|e| e.code);
+        assert_eq!(ok("/settings"), Ok("kestrel://localhost/settings".into()));
+        assert_eq!(
+            ok("about.html?x=1#y"),
+            Ok("kestrel://localhost/about.html?x=1#y".into())
+        );
+        assert_eq!(ok("../../etc"), Ok("kestrel://localhost/etc".into()));
+        assert_eq!(
+            ok("kestrel://localhost/a"),
+            Ok("kestrel://localhost/a".into())
+        );
+        assert_eq!(
+            ok("http://kestrel.localhost/a?b"),
+            Ok("kestrel://localhost/a?b".into())
+        );
+        assert_eq!(ok("kestrel://other/x"), Ok("kestrel://localhost/x".into()));
+        for bad in [
+            "https://example.com/",
+            "//example.com/x",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+        ] {
+            assert_eq!(ok(bad), Err("permission_denied".into()), "{bad}");
+        }
     }
 
     #[test]

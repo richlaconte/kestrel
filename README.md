@@ -74,7 +74,8 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   throw an error with its own `code` from the set
 - **A std-lib you call straight from the webview**, no `native.ts` needed:
   `import { app, appWindow, fs, store } from "kestrel-native"`. `app.version()` and
-  `app.quit()`; `appWindow.setTitle/minimize/maximize/close`; `fs.readText/readBytes/
+  `app.quit()`; `appWindow.setTitle/minimize/maximize/close`, and `appWindow.open("/settings")`
+  for more windows on the app's own pages (a `label` opens one only once); `fs.readText/readBytes/
   writeText/exists/appDataDir` with the same permission scope native code gets; and a
   durable `store` (`get/set/delete/keys`) in `<app data dir>/.kestrel/store.json`,
   saved to disk before each change resolves. Plus native `dialog`s (`pickFile`,
@@ -115,7 +116,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   from any directory
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-`appWindow.open` (more windows), `tray`, and signed installers with auto-update on top of `build`. See
+`tray`, and signed installers with auto-update on top of `build`. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

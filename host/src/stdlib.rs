@@ -7,9 +7,9 @@
 // blocks painting.
 
 use serde::Deserialize;
-use tauri::{ipc::Response, AppHandle, State, WebviewWindow};
+use tauri::{ipc::Response, AppHandle, Manager, State, WebviewWindow};
 
-use crate::{error::KestrelError, scope, store::Store, Manifest};
+use crate::{error::KestrelError, scope, store::Store, window, Manifest};
 
 /// The fs grant the webview's `fs` module checks: the same one native code
 /// gets, so both sides of the app always see the same files.
@@ -64,6 +64,87 @@ pub fn window_maximize(window: WebviewWindow) -> Result<(), KestrelError> {
 #[tauri::command]
 pub fn window_close(window: WebviewWindow) -> Result<(), KestrelError> {
     window.close().map_err(window_err)
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenOptions {
+    /// Names the window. Opening a label that's already open focuses it.
+    label: Option<String>,
+    title: Option<String>,
+    width: Option<f64>,
+    height: Option<f64>,
+    #[serde(flatten)]
+    window: window::WindowOptions,
+}
+
+/// Another window on one of the app's pages, with the same storage, lock and
+/// IPC as the main one. Resolves to its label. Async: on Windows, creating a
+/// window from a sync command deadlocks.
+#[tauri::command]
+pub async fn window_open(
+    app: AppHandle,
+    manifest: State<'_, Manifest>,
+    storage: State<'_, window::Storage>,
+    path: String,
+    opts: Option<OpenOptions>,
+) -> Result<String, KestrelError> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(1);
+
+    let opts = opts.unwrap_or_default();
+    let url = window::app_page(&path)?;
+    let bad = |msg: String| KestrelError::new("io", format!("appWindow.open: {msg}"));
+    let o = &opts.window;
+    for (name, v) in [
+        ("width", opts.width),
+        ("height", opts.height),
+        ("minWidth", o.min_width),
+        ("minHeight", o.min_height),
+        ("maxWidth", o.max_width),
+        ("maxHeight", o.max_height),
+    ] {
+        if v.is_some_and(|v| !(v.is_finite() && v > 0.0)) {
+            return Err(bad(format!("`{name}` must be a positive number")));
+        }
+    }
+    let label = match opts.label {
+        Some(l) => {
+            let ok = !l.is_empty()
+                && l.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_/:".contains(c));
+            if !ok {
+                return Err(bad(format!(
+                    "`label` must be letters, digits, -, _, / and : (got {l:?})"
+                )));
+            }
+            l
+        }
+        None => loop {
+            let l = format!("window-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+            if app.get_webview_window(&l).is_none() {
+                break l;
+            }
+        },
+    };
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.unminimize();
+        w.set_focus().map_err(window_err)?;
+        return Ok(label);
+    }
+    let (w, h) = o.clamp(
+        opts.width.unwrap_or(manifest.width),
+        opts.height.unwrap_or(manifest.height),
+    );
+    let mut b = o
+        .apply(window::app_window(&app, &label, url, &storage))
+        .title(opts.title.as_deref().unwrap_or(&manifest.title))
+        .inner_size(w, h);
+    if o.center {
+        b = b.center();
+    }
+    b.build().map_err(window_err)?;
+    Ok(label)
 }
 
 // ---- fs ----

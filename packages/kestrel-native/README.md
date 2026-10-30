@@ -11,6 +11,7 @@ import { app, appWindow, dialog, fs, store, KestrelError } from "kestrel-native"
 
 await app.version();                 // kestrel.json "version", else package.json's
 await appWindow.setTitle("Saved");   // also minimize(), maximize(), close()
+await appWindow.open("/settings", { label: "settings", width: 480 }); // an app page, opened once
 await store.set("theme", "dark");    // durable: on disk before it resolves
 const theme = await store.get<string>("theme");
 await fs.writeText("notes.txt", "hi"); // needs "fs:app-data" (or "fs:all")
@@ -32,4 +33,5 @@ Also `notify(title, body?)` (`"notifications"`), `clipboard.readText/writeText`
 - Every call returns a Promise that rejects with a `KestrelError` (`err.code`).
 
 For your own native functions, `kestrel typegen` generates fully typed stubs from your
-`native.ts`; `callNative` is the untyped escape hatch. MIT.
+`native.ts`, plus a typed `on(event, cb)` for the events it `emit`s; `callNative` and
+the untyped `on` here are the escape hatches. MIT.

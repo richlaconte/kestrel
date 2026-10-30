@@ -37,6 +37,22 @@ await step("clipRead", async () => (await clipboard.readText()) === marker);
 // Refused schemes and non-URLs: nothing is ever opened.
 await step("openFile", () => shell.open("file:///etc/hosts"));
 await step("openJunk", () => shell.open("not a url"));
+// #17: a second window on an app page shares the store; a label opens once;
+// anything off the app is refused before a window exists.
+await step("open", () => appWindow.open("/second.html", { label: "second", width: 320, height: 240 }));
+await step("openAgain", () => appWindow.open("second.html", { label: "second" }));
+await step("openRemote", () => appWindow.open("https://example.com/"));
+await step("openBadLabel", () => appWindow.open("/second.html", { label: "no spaces" }));
+await step("fromSecond", async () => {
+  for (let i = 0; i < 600; i++) {
+    const v = await store.get("fromSecond");
+    if (v !== undefined) return v;
+    await new Promise((res) => setTimeout(res, 100));
+  }
+  return "timed out";
+});
+await store.delete("fromSecond");
+
 // Only when ungranted: a real notification needs a bundled app on macOS.
 if (!permissions.includes("fs:app-data")) await step("notify", () => notify("e2e"));
 

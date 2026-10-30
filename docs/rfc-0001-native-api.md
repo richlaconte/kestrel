@@ -44,7 +44,14 @@ my-app/
 Principle: **the manifest is the whole configuration.** No `tauri.conf.json`, no
 `forge.config.ts`, no build-tool contract maintained by hand (friction items T1, T2, E1).
 
-## 3. The std-lib: `import { … } from "kestrel/native"`
+## 3. The std-lib: `import { … } from "kestrel-native"`
+
+**Package name (decided, #17):** the webview std-lib ships as its own package,
+`kestrel-native`, not as a `kestrel/native` export. The bare `kestrel` name on npm isn't
+ours, a subpath of the CLI package (`kestreljs`) would tie the webview runtime's version
+to the CLI's, and `kestreljs/native/host` already names the *native* side (§4(f)). Two
+names for two sides: `kestrel-native` in the webview, `kestreljs/native/host` in
+`native.ts`. "`kestrel/native`" in this document means the API, not an import path.
 
 Small on purpose; each module earned its place in the friction log or the plan's
 "typical app" survey. Everything returns a `Promise`; everything is typed.
@@ -52,7 +59,7 @@ Small on purpose; each module earned its place in the friction log or the plan's
 | Module | v0 surface (abridged) | Notes |
 |---|---|---|
 | `app` | `manifest()`, `version()`, `quit()` | |
-| `appWindow` | `setTitle()`, `minimize()`, `maximize()`, `close()`, `open(url, opts)` | one main window default; not `window`, which would shadow the DOM global |
+| `appWindow` | `setTitle()`, `minimize()`, `maximize()`, `close()`, `open(path, opts)` | calls act on the calling window; `open` shows one of the app's own pages (never another site) with the same storage and std-lib, and a `label` opens a window once; not `window`, which would shadow the DOM global |
 | `fs` | `readText(p)`, `writeText(p, s)`, `readBytes(p)`, `exists(p)`, `appDataDir()` | scope-gated, §6 |
 | `dialog` | `pickFile(opts)`, `pickFolder()`, `save(opts)`, `message(opts)` | native dialogs; no permission to show one, `fs:pick` to use what's picked; cancel resolves `null` |
 | `notify` | `notify(title, body?)` | `notifications` |

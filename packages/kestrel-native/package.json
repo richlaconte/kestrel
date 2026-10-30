@@ -1,7 +1,7 @@
 {
   "name": "kestrel-native",
   "version": "0.1.0",
-  "description": "Typed client runtime for the Kestrel native API (kestrel/native).",
+  "description": "The Kestrel webview std-lib: typed app, window, fs, dialog, store, clipboard and more.",
   "license": "MIT",
   "type": "module",
   "main": "index.js",

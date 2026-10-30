@@ -59,13 +59,14 @@ export const app = {
   quit: () => invoke("app_quit"),
 };
 
-/** appWindow — the app's main window. Not `window`: importing that name
- * would shadow the DOM global in the importing file. */
+/** appWindow — the calling window, and opening more. Not `window`: importing
+ * that name would shadow the DOM global in the importing file. */
 export const appWindow = {
   setTitle: (title) => invoke("window_set_title", { title }),
   minimize: () => invoke("window_minimize"),
   maximize: () => invoke("window_maximize"),
   close: () => invoke("window_close"),
+  open: (path, opts) => invoke("window_open", { path, opts }),
 };
 
 /** fs — files, gated by kestrel.json `permissions` (same scope as native code) */

@@ -20,7 +20,7 @@ mod window;
 
 use error::KestrelError;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, State};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -517,8 +517,10 @@ fn main() {
         .remember_window
         .then(|| window::WindowState::open(&data_dir));
     let saver = window_state.clone();
-    let webview_dir = scope::webview_data_dir(&data_dir);
-    let store_id = scope::webview_store_id(&manifest.app_id);
+    let storage = window::Storage {
+        dir: scope::webview_data_dir(&data_dir),
+        store_id: scope::webview_store_id(&manifest.app_id),
+    };
 
     // Test hook for headless CI runs of built bundles.
     if let Ok(ms) = std::env::var("KESTREL_EXIT_AFTER_MS") {
@@ -569,6 +571,7 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(manifest)
         .manage(engine)
+        .manage(storage.clone())
         .manage(stdlib::WebFs(fs))
         .manage(store::Store::open(&data_dir))
         .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
@@ -595,6 +598,7 @@ fn main() {
             stdlib::window_minimize,
             stdlib::window_maximize,
             stdlib::window_close,
+            stdlib::window_open,
             stdlib::fs_read_text,
             stdlib::fs_read_bytes,
             stdlib::fs_write_text,
@@ -641,11 +645,7 @@ fn main() {
                 .map(|s| s.rect)
                 .filter(|r| window::reachable(*r, &displays));
             let mut builder = opts
-                .apply(WebviewWindowBuilder::new(
-                    app,
-                    "main",
-                    WebviewUrl::External(url),
-                ))
+                .apply(window::app_window(app, "main", url, &storage))
                 .title(&window_cfg.title)
                 .inner_size(w, h);
             builder = match place {
@@ -653,33 +653,7 @@ fn main() {
                 None if opts.center => builder.center(),
                 None => builder,
             };
-            let main = builder
-                // Every app shares this binary and the kestrel://localhost
-                // origin, so storage must be split per app explicitly:
-                // a data directory on Windows/Linux, a data store on macOS
-                // (14+; older macOS falls back to the shared default store).
-                .data_directory(webview_dir)
-                .data_store_identifier(store_id)
-                // The window only ever shows the app. External links open
-                // in the system browser; anything else is refused.
-                .on_navigation(|url| {
-                    if serve::is_app_url(url) || url.scheme() == "about" {
-                        return true;
-                    }
-                    if let Err(e) = serve::open_external(url) {
-                        eprintln!("kestrel-host: {e}");
-                    }
-                    false
-                })
-                .on_new_window(|url, _| {
-                    if !serve::is_app_url(&url) {
-                        if let Err(e) = serve::open_external(&url) {
-                            eprintln!("kestrel-host: {e}");
-                        }
-                    }
-                    tauri::webview::NewWindowResponse::Deny
-                })
-                .build()?;
+            let main = builder.build()?;
             if let Some(state) = window_state {
                 if saved.is_some_and(|s| s.maximized) {
                     main.maximize()?;
