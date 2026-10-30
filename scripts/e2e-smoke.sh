@@ -17,7 +17,10 @@ cd smoke-app
 
 if [ "$TEMPLATE" = "react" ]; then
   echo "== npm install =="
-  npm install --silent
+  # Test the repo's CLI, not whatever kestreljs is on the registry (which may
+  # lag behind or not exist yet for the version the template pins).
+  npm pkg set "devDependencies.kestreljs=file:$REPO_ROOT/packages/kestrel"
+  npm install --no-audit --no-fund --loglevel=error
 fi
 
 echo "== dev (headless, self-exiting) =="

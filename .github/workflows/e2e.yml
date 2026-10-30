@@ -10,7 +10,7 @@ jobs:
     name: create → dev → IPC round-trip (Linux, headless)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: System deps (webkit2gtk + xvfb)
         run: |
@@ -22,9 +22,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: host
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Build host
         working-directory: host
