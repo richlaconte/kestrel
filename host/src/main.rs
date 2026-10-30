@@ -16,10 +16,11 @@ mod scope;
 mod serve;
 mod stdlib;
 mod store;
+mod window;
 
 use error::KestrelError;
 use serde::{Deserialize, Serialize};
-use tauri::{State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, State};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +35,10 @@ struct Manifest {
     width: f64,
     #[serde(default = "default_height")]
     height: f64,
+    /// resizable, min/max size, center, decorations, titleBarStyle,
+    /// rememberWindow (#23).
+    #[serde(flatten)]
+    window: window::WindowOptions,
     /// Directory containing the app's built frontend (index.html at its root).
     frontend: String,
     /// Optional "native functions" module: privileged JS run in an embedded
@@ -89,6 +94,13 @@ enum EngineMsg {
 
 struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<EngineMsg>>>);
 
+/// Where `emit` from native code goes: event name and JSON payload. The app
+/// sends them to every window as one `kestrel:native` Tauri event.
+type Emit = std::sync::Arc<dyn Fn(String, serde_json::Value) + Send + Sync>;
+
+/// The Tauri event that carries native events: `{ event, payload }`.
+const NATIVE_EVENT: &str = "kestrel:native";
+
 // Engine: rquickjs (QuickJS with first-class MSVC support — the earlier
 // quick-js crate could not build on Windows, which blocked the CI matrix).
 // One engine thread per app; calls and reloads are handled in order, so a
@@ -96,10 +108,11 @@ struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<EngineMsg>>>);
 fn start_native_engine(
     script_path: PathBuf,
     fs: Option<scope::Fs>,
+    emit: Emit,
 ) -> std::sync::mpsc::Sender<EngineMsg> {
     let (tx, rx) = std::sync::mpsc::channel::<EngineMsg>();
     std::thread::spawn(move || {
-        let mut engine = LoadedModule::load(&script_path, fs.clone());
+        let mut engine = LoadedModule::load(&script_path, fs.clone(), emit.clone());
         while let Ok(msg) = rx.recv() {
             match msg {
                 EngineMsg::Call(name, args, reply) => {
@@ -107,7 +120,7 @@ fn start_native_engine(
                 }
                 // A fresh runtime: module state resets, as documented.
                 EngineMsg::Reload => {
-                    engine = LoadedModule::load(&script_path, fs.clone());
+                    engine = LoadedModule::load(&script_path, fs.clone(), emit.clone());
                     if engine.load_error.is_none() {
                         eprintln!("kestrel-host: native module reloaded");
                     }
@@ -129,7 +142,7 @@ struct LoadedModule {
 }
 
 impl LoadedModule {
-    fn load(script_path: &Path, fs: Option<scope::Fs>) -> Self {
+    fn load(script_path: &Path, fs: Option<scope::Fs>, emit: Emit) -> Self {
         use rquickjs::{function::Func, Context, Ctx, Exception, Runtime};
 
         let rt = Runtime::new().expect("quickjs runtime");
@@ -185,6 +198,26 @@ impl LoadedModule {
                     .set("hostAppDataDir", Func::from(move || root.clone()))
                     .expect("bind hostAppDataDir");
             }
+            // Push to the webview (#22). Needs no permission: it only
+            // reaches the app's own windows. The payload arrives as JSON
+            // text, already checked by kestreljs/native/host.
+            globals
+                .set(
+                    "hostEmit",
+                    Func::from(move |ctx: Ctx<'_>, event: String, payload: String| {
+                        match serde_json::from_str(&payload) {
+                            Ok(v) => {
+                                emit(event, v);
+                                Ok(())
+                            }
+                            Err(e) => Err(Exception::throw_type(
+                                &ctx,
+                                &format!("emit(\"{event}\"): payload is not JSON: {e}"),
+                            )),
+                        }
+                    }),
+                )
+                .expect("bind hostEmit");
             globals
                 .set(
                     "hostLog",
@@ -479,8 +512,15 @@ fn main() {
             .unwrap_or_else(|e| fail(e))
             .with_pick(picks)
     });
-    let webview_dir = scope::webview_data_dir(&data_dir);
-    let store_id = scope::webview_store_id(&manifest.app_id);
+    let window_state = manifest
+        .window
+        .remember_window
+        .then(|| window::WindowState::open(&data_dir));
+    let saver = window_state.clone();
+    let storage = window::Storage {
+        dir: scope::webview_data_dir(&data_dir),
+        store_id: scope::webview_store_id(&manifest.app_id),
+    };
 
     // Test hook for headless CI runs of built bundles.
     if let Ok(ms) = std::env::var("KESTREL_EXIT_AFTER_MS") {
@@ -495,11 +535,24 @@ fn main() {
         .clone()
         .unwrap_or_else(|| serve::DEFAULT_CSP.to_string());
 
+    // Native code may emit before the app is up (at module load); those
+    // events have no window to go to.
+    let app_handle = std::sync::Arc::new(std::sync::OnceLock::<tauri::AppHandle>::new());
+    let handle = app_handle.clone();
+    let emit: Emit = std::sync::Arc::new(move |event, payload| match handle.get() {
+        Some(app) => {
+            let msg = serde_json::json!({ "event": event, "payload": payload });
+            if let Err(e) = app.emit(NATIVE_EVENT, msg) {
+                eprintln!("kestrel-host: emit(\"{event}\") failed: {e}");
+            }
+        }
+        None => eprintln!("kestrel-host: emit(\"{event}\") ran before any window opened; dropped"),
+    });
     let engine = NativeEngine(
         manifest
             .native
             .as_ref()
-            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs.clone()))),
+            .map(|p| Mutex::new(start_native_engine(PathBuf::from(p), fs.clone(), emit))),
     );
 
     if manifest.dev_reload {
@@ -518,6 +571,7 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(manifest)
         .manage(engine)
+        .manage(storage.clone())
         .manage(stdlib::WebFs(fs))
         .manage(store::Store::open(&data_dir))
         .register_asynchronous_uri_scheme_protocol("kestrel", move |_ctx, request, responder| {
@@ -544,6 +598,7 @@ fn main() {
             stdlib::window_minimize,
             stdlib::window_maximize,
             stdlib::window_close,
+            stdlib::window_open,
             stdlib::fs_read_text,
             stdlib::fs_read_bytes,
             stdlib::fs_write_text,
@@ -563,36 +618,55 @@ fn main() {
             stdlib::shell_open,
         ])
         .setup(move |app| {
+            let _ = app_handle.set(app.handle().clone());
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            let opts = &window_cfg.window;
+            // Last run's bounds, if remembered; the position only if it's
+            // still on a display.
+            let saved = window_state.as_ref().and_then(|s| s.saved());
+            let (w, h) = saved.map_or((window_cfg.width, window_cfg.height), |s| {
+                (s.rect.width, s.rect.height)
+            });
+            let (w, h) = opts.clamp(w, h);
+            let displays: Vec<window::Rect> = app
+                .available_monitors()?
+                .iter()
+                .map(|m| {
+                    let (a, s) = (m.work_area(), m.scale_factor());
+                    window::Rect {
+                        x: a.position.x as f64 / s,
+                        y: a.position.y as f64 / s,
+                        width: a.size.width as f64 / s,
+                        height: a.size.height as f64 / s,
+                    }
+                })
+                .collect();
+            let place = saved
+                .map(|s| s.rect)
+                .filter(|r| window::reachable(*r, &displays));
+            let mut builder = opts
+                .apply(window::app_window(app, "main", url, &storage))
                 .title(&window_cfg.title)
-                .inner_size(window_cfg.width, window_cfg.height)
-                // Every app shares this binary and the kestrel://localhost
-                // origin, so storage must be split per app explicitly:
-                // a data directory on Windows/Linux, a data store on macOS
-                // (14+; older macOS falls back to the shared default store).
-                .data_directory(webview_dir)
-                .data_store_identifier(store_id)
-                // The window only ever shows the app. External links open
-                // in the system browser; anything else is refused.
-                .on_navigation(|url| {
-                    if serve::is_app_url(url) || url.scheme() == "about" {
-                        return true;
+                .inner_size(w, h);
+            builder = match place {
+                Some(r) => builder.position(r.x, r.y),
+                None if opts.center => builder.center(),
+                None => builder,
+            };
+            let main = builder.build()?;
+            if let Some(state) = window_state {
+                if saved.is_some_and(|s| s.maximized) {
+                    main.maximize()?;
+                }
+                let w = main.clone();
+                // Once now, for a size the min/max bounds changed.
+                state.track(&main);
+                main.on_window_event(move |e| {
+                    if let tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) = e {
+                        state.track(&w);
                     }
-                    if let Err(e) = serve::open_external(url) {
-                        eprintln!("kestrel-host: {e}");
-                    }
-                    false
-                })
-                .on_new_window(|url, _| {
-                    if !serve::is_app_url(&url) {
-                        if let Err(e) = serve::open_external(&url) {
-                            eprintln!("kestrel-host: {e}");
-                        }
-                    }
-                    tauri::webview::NewWindowResponse::Deny
-                })
-                .build()?;
+                });
+            }
             if let Some(ms) = window_cfg.exit_after_ms {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
@@ -602,8 +676,13 @@ fn main() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running kestrel-host");
+        .build(tauri::generate_context!())
+        .expect("error while starting kestrel-host")
+        .run(move |_, event| {
+            if let (tauri::RunEvent::Exit, Some(s)) = (event, &saver) {
+                s.save();
+            }
+        });
 }
 
 #[cfg(test)]
@@ -640,7 +719,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let script = dir.join("native.js");
         fs::write(&script, src).unwrap();
-        let tx = start_native_engine(script, fs);
+        let tx = start_native_engine(script, fs, std::sync::Arc::new(|_, _| {}));
         move |name, args| {
             let (rtx, rrx) = std::sync::mpsc::channel();
             tx.send(EngineMsg::Call(name.into(), args.into(), rtx))
@@ -749,7 +828,7 @@ mod tests {
     fn reload_picks_up_new_code_resets_state_and_recovers_from_errors() {
         let script =
             app(&[("native.js", "let n = 0; native.v = () => ++n * 1;")]).join("native.js");
-        let tx = start_native_engine(script.clone(), None);
+        let tx = start_native_engine(script.clone(), None, std::sync::Arc::new(|_, _| {}));
         let call = |name: &str| {
             let (rtx, rrx) = std::sync::mpsc::channel();
             tx.send(EngineMsg::Call(name.into(), "{}".into(), rtx))
@@ -779,6 +858,39 @@ mod tests {
         let msgs: Vec<_> = rx.try_iter().collect();
         assert_eq!(msgs.len(), 2);
         assert!(msgs.iter().all(|m| matches!(m, EngineMsg::Reload)));
+    }
+
+    #[test]
+    fn emit_reaches_the_app_and_rejects_bad_payloads() {
+        let sent = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let log = sent.clone();
+        let script = app(&[(
+            "native.js",
+            r#"native.work = ({ n }) => { for (let i = 1; i <= n; i++) hostEmit("progress", JSON.stringify({ i })); return n; };
+               native.bad = () => hostEmit("x", "{ nope");"#,
+        )])
+        .join("native.js");
+        let tx = start_native_engine(
+            script,
+            None,
+            std::sync::Arc::new(move |e, p| log.lock().unwrap().push((e, p))),
+        );
+        let call = |name: &str, args: &str| {
+            let (rtx, rrx) = std::sync::mpsc::channel();
+            tx.send(EngineMsg::Call(name.into(), args.into(), rtx))
+                .unwrap();
+            rrx.recv().unwrap().map_err(|e| e.to_string())
+        };
+        assert_eq!(call("work", r#"{"n":2}"#), Ok("2".into()));
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![
+                ("progress".to_string(), serde_json::json!({ "i": 1 })),
+                ("progress".to_string(), serde_json::json!({ "i": 2 })),
+            ]
+        );
+        let e = call("bad", "{}").unwrap_err();
+        assert!(e.contains("payload is not JSON"), "{e}");
     }
 
     #[test]
@@ -861,11 +973,11 @@ mod tests {
     fn ungranted_fs_bindings_are_absent() {
         let call = engine(
             "native.kinds = () => [typeof hostReadFile, typeof hostWriteFile, \
-             typeof hostExists, typeof hostAppDataDir, typeof hostLog];",
+             typeof hostExists, typeof hostAppDataDir, typeof hostLog, typeof hostEmit];",
         );
         assert_eq!(
             call("kinds", "{}"),
-            Ok(r#"["undefined","undefined","undefined","undefined","function"]"#.into())
+            Ok(r#"["undefined","undefined","undefined","undefined","function","function"]"#.into())
         );
     }
 

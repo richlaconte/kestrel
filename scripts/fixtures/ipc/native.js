@@ -31,6 +31,12 @@ native.spin = ({ ms }) => {
   while (Date.now() < end) {}
   return "spun";
 };
+// #22: events pushed to the webview while a call runs.
+native.progress = ({ n }) => {
+  for (let i = 1; i <= n; i++) hostEmit("progress", JSON.stringify({ i }));
+  hostEmit("other", "null");
+  return n;
+};
 native.report = (results) => {
   hostWriteFile("ipc-results.json", JSON.stringify(results, null, 2));
   return true;

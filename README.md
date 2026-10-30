@@ -74,7 +74,8 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   throw an error with its own `code` from the set
 - **A std-lib you call straight from the webview**, no `native.ts` needed:
   `import { app, appWindow, fs, store } from "kestrel-native"`. `app.version()` and
-  `app.quit()`; `appWindow.setTitle/minimize/maximize/close`; `fs.readText/readBytes/
+  `app.quit()`; `appWindow.setTitle/minimize/maximize/close`, and `appWindow.open("/settings")`
+  for more windows on the app's own pages (a `label` opens one only once); `fs.readText/readBytes/
   writeText/exists/appDataDir` with the same permission scope native code gets; and a
   durable `store` (`get/set/delete/keys`) in `<app data dir>/.kestrel/store.json`,
   saved to disk before each change resolves. Plus native `dialog`s (`pickFile`,
@@ -84,6 +85,12 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
   keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on
   macOS 14+; older macOS falls back to one shared store)
+- **Window options live in the manifest:** `resizable`, `minWidth`/`minHeight`,
+  `maxWidth`/`maxHeight`, `center`, `decorations` (off for a frameless window) and, on
+  macOS, `titleBarStyle` (`"transparent"` or `"overlay"`). The window reopens where the
+  user left it: size, position and maximized state, unless that display is gone. Set
+  `"rememberWindow": false` to opt out. macOS apps get the standard app menu, so
+  copy, paste and quit shortcuts work
 - **The React + Vite template has real HMR in the native window.** In dev, the
   `kestrel://` protocol reverse-proxies to Vite (methods, headers and bodies), so the
   window origin and the IPC policy are the same in dev and prod. Only the app's own
@@ -93,6 +100,10 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   fails with an error that says why). Typed client stubs are generated with the
   TypeScript compiler API, including named types, so a rename breaks the frontend at
   compile time
+- **Native code can push events to the page.** `emit("progress", { done })` from
+  `kestreljs/native/host` reaches `on("progress", cb)` in the generated client while a
+  call is still running. Export an `Events` interface from `native.ts` and both sides
+  are typed: a wrong event name or payload fails to compile
 - **Native code hot-reloads.** `kestrel dev` watches `native.ts` and everything it
   imports. A save rebuilds the bundle and the stubs, and the host swaps in a fresh
   engine, so the next call runs the new code without restarting the window. Module
@@ -105,7 +116,7 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   from any directory
 
 Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-`appWindow.open` (more windows), `tray`, and signed installers with auto-update on top of `build`. See
+`tray`, and signed installers with auto-update on top of `build`. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

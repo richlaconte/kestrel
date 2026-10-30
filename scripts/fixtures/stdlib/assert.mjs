@@ -13,6 +13,11 @@ assert.equal(r.deleteMissing, false);
 assert.deepEqual(r.keys.filter((k) => k !== "result"), ["prefs", "runs"]);
 assert.equal(r.setTitle, null);
 assert.deepEqual(r.badDialog, { error: "io", kestrelError: true }, "dialog options are validated");
+assert.equal(r.open, "second");
+assert.equal(r.openAgain, "second", "an open label is focused, not opened twice");
+assert.deepEqual(r.openRemote, denied, "appWindow.open refuses other sites");
+assert.deepEqual(r.openBadLabel, { error: "io", kestrelError: true });
+assert.equal(r.fromSecond, "/second.html", "the second window shares the app's store");
 
 if (mode === "granted") {
   assert.equal(r.readText, "héllo");

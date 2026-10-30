@@ -36,6 +36,19 @@ const invoke = (cmd, args) => {
   });
 };
 
+/**
+ * Subscribe to an event native code sends with `emit`. Returns a function
+ * that unsubscribes. Prefer the typed `on` in the generated native-client.
+ */
+export const on = (event, cb) => {
+  const events = globalThis.window?.__TAURI__?.event;
+  if (!events) return () => {};
+  const off = events.listen("kestrel:native", (e) => {
+    if (e.payload.event === event) cb(e.payload.payload);
+  });
+  return () => off.then((f) => f());
+};
+
 /** Low-level escape hatch; prefer generated stubs from `kestrel typegen`. */
 export const callNative = (name, args = {}) => invoke("call_native", { name, args });
 
@@ -46,13 +59,14 @@ export const app = {
   quit: () => invoke("app_quit"),
 };
 
-/** appWindow — the app's main window. Not `window`: importing that name
- * would shadow the DOM global in the importing file. */
+/** appWindow — the calling window, and opening more. Not `window`: importing
+ * that name would shadow the DOM global in the importing file. */
 export const appWindow = {
   setTitle: (title) => invoke("window_set_title", { title }),
   minimize: () => invoke("window_minimize"),
   maximize: () => invoke("window_maximize"),
   close: () => invoke("window_close"),
+  open: (path, opts) => invoke("window_open", { path, opts }),
 };
 
 /** fs — files, gated by kestrel.json `permissions` (same scope as native code) */

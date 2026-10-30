@@ -19,6 +19,7 @@ test("each std-lib call maps onto its host command", async () => {
   await win.minimize();
   await win.maximize();
   await win.close();
+  await win.open("/settings", { label: "settings", width: 400 });
   await fs.readText("a");
   await fs.writeText("a", "x");
   await fs.exists("a");
@@ -33,6 +34,7 @@ test("each std-lib call maps onto its host command", async () => {
     ["window_minimize", undefined],
     ["window_maximize", undefined],
     ["window_close", undefined],
+    ["window_open", { path: "/settings", opts: { label: "settings", width: 400 } }],
     ["fs_read_text", { path: "a" }],
     ["fs_write_text", { path: "a", contents: "x" }],
     ["fs_exists", { path: "a" }],

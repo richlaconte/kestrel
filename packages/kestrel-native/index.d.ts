@@ -15,6 +15,12 @@ export declare class KestrelError extends Error {
   static from(e: unknown): KestrelError;
 }
 
+/**
+ * Subscribe to an event native code sends with `emit`. Returns a function
+ * that unsubscribes. The generated native-client has a typed `on`.
+ */
+export declare function on(event: string, cb: (payload: unknown) => void): () => void;
+
 export declare function callNative(name: string, args?: Record<string, unknown>): Promise<unknown>;
 
 export declare const app: {
@@ -32,12 +38,41 @@ export declare const app: {
   quit(): Promise<void>;
 };
 
-/** The app's main window. (Not `window`, which would shadow the DOM global.) */
+export interface OpenWindowOptions {
+  /** Names the window. Opening a label that's already open focuses that window instead. */
+  label?: string;
+  /** Defaults to the manifest's title. */
+  title?: string;
+  /** Default to the manifest's width and height. */
+  width?: number;
+  height?: number;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  resizable?: boolean;
+  center?: boolean;
+  decorations?: boolean;
+  /** macOS only. */
+  titleBarStyle?: "visible" | "transparent" | "overlay";
+}
+
+/**
+ * The window the calling page is in. (Not `window`, which would shadow the
+ * DOM global.)
+ */
 export declare const appWindow: {
   setTitle(title: string): Promise<void>;
   minimize(): Promise<void>;
   maximize(): Promise<void>;
   close(): Promise<void>;
+  /**
+   * Open another window on one of the app's pages, like "/settings" or
+   * "about.html". It shares the app's storage and std-lib, and native
+   * events reach it too. Resolves to the window's label. Any other URL
+   * rejects with `permission_denied`: use `shell.open` for links.
+   */
+  open(path: string, opts?: OpenWindowOptions): Promise<string>;
 };
 
 /**

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PERMISSIONS, validateManifest } from "../src/manifest.js";
+import { PERMISSIONS, WINDOW_FIELDS, validateManifest } from "../src/manifest.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ok = { appId: "my-app", title: "My App", frontend: "." };
@@ -63,4 +63,25 @@ test("version is an optional non-empty string", () => {
   assert.deepEqual(validateManifest({ ...ok, version: "1.2.3" }), []);
   for (const bad of ["", 1])
     assert.match(validateManifest({ ...ok, version: bad }).join(), /`version` must be a non-empty string/);
+});
+
+test("window options: types, enum and min/max order", () => {
+  const errs = (o) => validateManifest({ ...ok, ...o }).join("\n");
+  assert.equal(
+    errs({ resizable: false, center: true, decorations: false, rememberWindow: false, titleBarStyle: "overlay", width: 800, minWidth: 400, maxWidth: 1200, minHeight: 300 }),
+    "",
+  );
+  assert.match(errs({ resizable: "no" }), /`resizable` must be true or false/);
+  assert.match(errs({ titleBarStyle: "hidden" }), /`titleBarStyle` must be one of "visible", "transparent", "overlay"/);
+  assert.match(errs({ minWidth: 0 }), /`minWidth` must be a positive number/);
+  assert.match(errs({ minWidth: 900, maxWidth: 800 }), /`minWidth` \(900\) is larger than `maxWidth` \(800\)/);
+  assert.match(errs({ width: 300, minWidth: 400 }), /`minWidth` \(400\) is larger than `width` \(300\)/);
+  assert.match(errs({ height: 900, maxHeight: 800 }), /`height` \(900\) is larger than `maxHeight` \(800\)/);
+});
+
+test("CLI and host agree on the window fields", () => {
+  const host = fs.readFileSync(path.join(ROOT, "..", "..", "host", "src", "window.rs"), "utf8");
+  const struct = host.match(/pub struct WindowOptions \{([\s\S]*?)\n\}/)[1];
+  const camel = (s) => s.replace(/_(\w)/g, (_, c) => c.toUpperCase());
+  assert.deepEqual([...struct.matchAll(/pub (\w+):/g)].map((x) => camel(x[1])), WINDOW_FIELDS);
 });
