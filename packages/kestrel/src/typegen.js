@@ -12,8 +12,67 @@ try {
   ts = null; // vanilla .js apps don't need it
 }
 
+/** Thrown for problems in the user's native.ts that they must fix. */
+export class TypegenError extends Error {}
+
+/** The first function-like node behind an exported symbol, if it is one. */
+function functionDeclOf(checker, sym) {
+  if (sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
+  for (const d of sym.declarations ?? []) {
+    if (ts.isFunctionDeclaration(d)) return d;
+    if (ts.isVariableDeclaration(d) && d.initializer) {
+      let init = d.initializer;
+      while (ts.isParenthesizedExpression(init) || ts.isAsExpression(init) || ts.isSatisfiesExpression?.(init))
+        init = init.expression;
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) return init;
+    }
+  }
+  return null;
+}
+
+/**
+ * Collect named types a type node references that must be imported into the
+ * client. Built-in/global types (Array, Promise, Record, Date…) don't need it.
+ * Non-exported local types are an error: the client couldn't name them.
+ */
+function collectTypeRefs(node, checker, entrySource, exportedNames, out, fnName) {
+  const visit = (n) => {
+    if (ts.isTypeReferenceNode(n) || ts.isExpressionWithTypeArguments(n)) {
+      const nameNode = ts.isTypeReferenceNode(n) ? n.typeName : n.expression;
+      const root = ts.isQualifiedName(nameNode) ? leftmost(nameNode) : nameNode;
+      const sym = checker.getSymbolAtLocation(root);
+      const decl = sym?.declarations?.[0];
+      if (decl && decl.getSourceFile() === entrySource && !ts.isTypeParameterDeclaration(decl)) {
+        const name = root.text;
+        if (!exportedNames.has(name))
+          throw new TypegenError(
+            `native.ts: \`${fnName}\` uses type \`${name}\`, which is not exported. ` +
+              `Add \`export\` to its declaration so native-client.ts can import it.`,
+          );
+        out.add(name);
+      }
+    }
+    if (ts.isTypeQueryNode(n))
+      throw new TypegenError(
+        `native.ts: \`${fnName}\` uses a \`typeof\` type, which the client can't import. Use a named type instead.`,
+      );
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+}
+
+function leftmost(q) {
+  while (ts.isQualifiedName(q)) q = q.left;
+  return q;
+}
+
+function unwrapPromise(text) {
+  const m = /^Promise<([\s\S]*)>$/.exec(text.trim());
+  return m ? m[1].trim() : text;
+}
+
 /** Extract { name, argsType, returnType, hasArgs } for each exported function. */
-function analyze(entry) {
+export function analyze(entry) {
   const program = ts.createProgram([entry], {
     target: ts.ScriptTarget.ES2020,
     strict: true,
@@ -21,34 +80,84 @@ function analyze(entry) {
   });
   const checker = program.getTypeChecker();
   const source = program.getSourceFile(entry);
+  const moduleSym = checker.getSymbolAtLocation(source);
+  const exports = moduleSym ? checker.getExportsOfModule(moduleSym) : [];
+  const exportedNames = new Set(exports.map((s) => s.name));
+  const typeImports = new Set();
   const fns = [];
+  const skipped = [];
 
-  source.forEachChild((node) => {
-    if (!ts.isFunctionDeclaration(node) || !node.name) return;
-    const exported = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
-    if (!exported) return;
+  for (const sym of exports) {
+    const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+    if (!(resolved.flags & ts.SymbolFlags.Value)) continue; // type-only export
+    const decl = functionDeclOf(checker, sym);
+    if (!decl) {
+      skipped.push(sym.name);
+      continue;
+    }
+    const name = sym.name;
+    const declSource = decl.getSourceFile();
+    if (declSource !== source)
+      throw new TypegenError(
+        `native.ts: \`${name}\` is re-exported from another file. Imports aren't bundled yet (see issue #20); define it in native.ts.`,
+      );
 
-    const name = node.name.text;
-    const param = node.parameters[0];
-    const argsType = param?.type ? param.type.getText(source) : null;
+    const param = decl.parameters[0];
+    let argsType = null;
+    if (param?.type) {
+      collectTypeRefs(param.type, checker, source, exportedNames, typeImports, name);
+      argsType = param.type.getText(source);
+    }
 
-    const sig = checker.getSignatureFromDeclaration(node);
-    let ret = checker.typeToString(
-      checker.getReturnTypeOfSignature(sig),
-      node,
-      ts.TypeFormatFlags.NoTruncation,
-    );
-    if (ret.startsWith("Promise<")) ret = ret.slice("Promise<".length, -1);
-    fns.push({ name, argsType, returnType: ret, hasArgs: Boolean(param) });
-  });
-  return fns;
+    let returnType;
+    if (decl.type) {
+      collectTypeRefs(decl.type, checker, source, exportedNames, typeImports, name);
+      returnType = unwrapPromise(decl.type.getText(source));
+    } else {
+      // Inferred: print structurally so no unexported names leak into the client.
+      const sig = checker.getSignatureFromDeclaration(decl);
+      let t = checker.getReturnTypeOfSignature(sig);
+      const awaited = checker.getAwaitedType?.(t);
+      if (awaited) t = awaited;
+      const flags = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.InTypeAlias;
+      returnType = checker.typeToString(t, decl, flags);
+      // The printer uses local type names where it can; resolve each one so
+      // exported types get imported and unexported ones fail clearly.
+      const typeNode = checker.typeToTypeNode(t, decl, ts.NodeBuilderFlags.NoTruncation);
+      const refs = [];
+      const walk = (n) => {
+        if (ts.isTypeReferenceNode(n) && ts.isIdentifier(n.typeName)) refs.push(n.typeName.text);
+        ts.forEachChild(n, walk);
+      };
+      if (typeNode) walk(typeNode);
+      for (const ref of refs) {
+        const s = checker.resolveName(ref, decl, ts.SymbolFlags.Type, false);
+        if (s?.declarations?.[0]?.getSourceFile() !== source) continue;
+        if (!exportedNames.has(ref))
+          throw new TypegenError(
+            `native.ts: \`${name}\` returns type \`${ref}\`, which is not exported. ` +
+              `Export it or annotate the return type.`,
+          );
+        typeImports.add(ref);
+      }
+      if (/\bimport\(/.test(returnType))
+        throw new TypegenError(
+          `native.ts: \`${name}\` has an inferred return type that references another module. Annotate its return type.`,
+        );
+    }
+    fns.push({ name, argsType, returnType, hasArgs: Boolean(param) });
+  }
+  return { fns, typeImports: [...typeImports].sort(), skipped };
 }
 
 /** Emit native-client.ts with exact types (renames break the frontend at compile time). */
-function emitClient(dir, fns) {
+export function emitClient(dir, { fns, typeImports }, nativeRel = "./native") {
   const lines = [
     "// AUTO-GENERATED by `kestrel typegen` — do not edit.",
     "/* eslint-disable */",
+    ...(typeImports.length
+      ? [`import type { ${typeImports.join(", ")} } from "${nativeRel}";`, ""]
+      : []),
     "const invoke = (name: string, args: unknown) =>",
     "  (window as any).__TAURI__.core.invoke('call_native', { name, args });",
     "",
@@ -59,11 +168,13 @@ function emitClient(dir, fns) {
     ),
     "",
   ];
-  fs.writeFileSync(path.join(dir, "native-client.ts"), lines.join("\n"));
+  const file = path.join(dir, "native-client.ts");
+  fs.writeFileSync(file, lines.join("\n"));
+  return file;
 }
 
 /** Transpile native.ts to a script QuickJS can eval; exports land on globalThis.native. */
-function compileNative(dir, entry) {
+export function compileNative(dir, entry) {
   const out = ts.transpileModule(fs.readFileSync(entry, "utf8"), {
     compilerOptions: {
       target: ts.ScriptTarget.ES2020,
@@ -100,15 +211,16 @@ function typegenJs(dir, nativePath) {
     "",
   ].join("\n");
   fs.writeFileSync(path.join(dir, "native-client.js"), js);
-  return { names, compiled: nativePath };
+  return { names, compiled: nativePath, skipped: [] };
 }
 
 /**
- * Main entry. Returns { names, compiled } where `compiled` is the file the
- * host's QuickJS engine should load.
+ * Main entry. Returns { names, compiled, skipped } where `compiled` is the
+ * file the host's QuickJS engine should load and `skipped` lists exported
+ * values that aren't functions (and so aren't callable from the webview).
  */
 export function runTypegen(dir, manifest) {
-  if (!manifest.native) return { names: [], compiled: null };
+  if (!manifest.native) return { names: [], compiled: null, skipped: [] };
   const entry = path.resolve(dir, manifest.native);
   if (!entry.endsWith(".ts")) return typegenJs(dir, entry);
 
@@ -116,8 +228,10 @@ export function runTypegen(dir, manifest) {
     throw new Error(
       "native.ts requires the `typescript` package — run npm install in the kestrel repo",
     );
-  const fns = analyze(entry);
-  emitClient(dir, fns);
+  const analysis = analyze(entry);
+  let rel = path.relative(dir, entry).replace(/\\/g, "/").replace(/\.ts$/, "");
+  if (!rel.startsWith(".")) rel = "./" + rel;
+  emitClient(dir, analysis, rel);
   const compiled = compileNative(dir, entry);
-  return { names: fns.map((f) => f.name), compiled };
+  return { names: analysis.fns.map((f) => f.name), compiled, skipped: analysis.skipped };
 }

@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build:host": "cd host && cargo build --release"
+    "build:host": "cd host && cargo build --release",
+    "test": "npm test --workspaces --if-present"
   }
 }

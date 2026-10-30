@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { runTypegen } from "../src/typegen.js";
+import { runTypegen, TypegenError } from "../src/typegen.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -77,7 +77,15 @@ function create(name) {
 function typegen(dir = ".", { quiet } = {}) {
   dir = path.resolve(dir);
   const m = readManifest(dir);
-  const res = runTypegen(dir, m);
+  let res;
+  try {
+    res = runTypegen(dir, m);
+  } catch (e) {
+    if (e instanceof TypegenError) die(e.message);
+    throw e;
+  }
+  for (const n of res.skipped)
+    console.warn(`\x1b[33mkestrel:\x1b[0m native.ts exports \`${n}\`, which isn't a function — it won't be callable from the webview`);
   if (!quiet) {
     if (!m.native) info("app declares no native module — nothing to generate");
     else info(`generated typed stubs — ${res.names.length} fn(s): ${res.names.join(", ")}`);
