@@ -109,7 +109,11 @@ stringly-typed IPC, no hand-synced `declare global`). The spike CLI ships a rege
 placeholder of this; the contract is what's specified here.
 
 Errors: a native function that throws rejects the stub's promise with `KestrelError`
-(§7) carrying the message and a `native_function` code — never a bare string.
+(§7) carrying the message and a `native_function` code — never a bare string. Two
+exceptions keep codes meaningful: a host binding's error that native code doesn't catch
+keeps its code (an unhandled `fs` miss arrives as `not_found`), and native code may throw
+an error whose `code` is from the closed set to choose it (`cancelled`, say). `detail`
+defaults to `{ function: <name> }`, or carries the thrown error's own JSON-safe `detail`.
 
 ## 6. Permissions
 
@@ -125,7 +129,7 @@ none: a manifest with no permissions is a pure sandboxed webview.
 
 Every rejection anywhere in the API is a `KestrelError { code, message, detail? }` with
 a closed set of codes: `permission_denied`, `not_found`, `io`, `native_function`,
-`cancelled` (user closed a dialog), `unsupported_platform`. Honest, greppable, and the
+`cancelled` (user closed a dialog), `unsupported_platform`, `timeout`. Honest, greppable, and the
 docs list every code per call. (Friction item K3: raw Rust panics are not an error UX.)
 
 ## 8. Open questions for comment

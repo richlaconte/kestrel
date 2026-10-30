@@ -4,6 +4,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use crate::error::KestrelError;
+
 /// Every permission the host understands. Unknown names are a manifest
 /// error, not a silent no-op: a grant that does nothing would mislead.
 pub const KNOWN: &[&str] = &["fs:app-data", "fs:all"];
@@ -102,9 +104,9 @@ impl Fs {
     /// Relative paths resolve in the data dir. Under `AppData`, `..` is
     /// refused outright and the nearest existing ancestor is canonicalized,
     /// so a symlink that points outside the data dir is an escape too.
-    pub fn resolve(&self, p: &str) -> Result<PathBuf, String> {
+    pub fn resolve(&self, p: &str) -> Result<PathBuf, KestrelError> {
         if p.is_empty() {
-            return Err("io: empty path".into());
+            return Err(KestrelError::new("io", "empty path"));
         }
         let path = Path::new(p);
         let joined = if path.is_absolute() {
@@ -116,7 +118,10 @@ impl Fs {
             return Ok(joined);
         }
         if path.components().any(|c| c == Component::ParentDir) {
-            return Err(format!("permission_denied: `..` is not allowed in {p}"));
+            return Err(KestrelError::new(
+                "permission_denied",
+                format!("`..` is not allowed in {p}"),
+            ));
         }
         // Walk up to the nearest ancestor that exists, then put the
         // not-yet-existing tail back on its canonical form.
@@ -128,20 +133,24 @@ impl Fs {
                 // There but unresolvable: a dangling symlink, which a
                 // write would follow to wherever it points.
                 Err(_) if existing.symlink_metadata().is_ok() => {
-                    return Err(format!("permission_denied: {p} is a broken symlink"));
+                    return Err(KestrelError::new(
+                        "permission_denied",
+                        format!("{p} is a broken symlink"),
+                    ));
                 }
                 Err(_) => match (existing.parent(), existing.file_name()) {
                     (Some(parent), Some(name)) => {
                         tail.push(name.to_owned());
                         existing = parent;
                     }
-                    _ => return Err(format!("io: cannot resolve {p}")),
+                    _ => return Err(KestrelError::new("io", format!("cannot resolve {p}"))),
                 },
             }
         };
         if !real.starts_with(&self.root) {
-            return Err(format!(
-                "permission_denied: {p} is outside the app data dir (fs:app-data)"
+            return Err(KestrelError::new(
+                "permission_denied",
+                format!("{p} is outside the app data dir (fs:app-data)"),
             ));
         }
         // Case-insensitive: macOS and Windows filesystems usually are.
@@ -152,20 +161,21 @@ impl Fs {
             .or_else(|| tail.last().map(|n| Component::Normal(n.as_os_str())));
         if let Some(Component::Normal(n)) = first {
             if n.to_string_lossy().eq_ignore_ascii_case(RESERVED) {
-                return Err(format!(
-                    "permission_denied: {p} is Kestrel's own storage, not app data"
+                return Err(KestrelError::new(
+                    "permission_denied",
+                    format!("{p} is Kestrel's own storage, not app data"),
                 ));
             }
         }
         Ok(tail.iter().rev().fold(real, |acc, n| acc.join(n)))
     }
 
-    pub fn read(&self, p: &str) -> Result<String, String> {
+    pub fn read(&self, p: &str) -> Result<String, KestrelError> {
         let real = self.resolve(p)?;
         std::fs::read_to_string(&real).map_err(|e| io_err(p, e))
     }
 
-    pub fn write(&self, p: &str, contents: &str) -> Result<(), String> {
+    pub fn write(&self, p: &str, contents: &str) -> Result<(), KestrelError> {
         let real = self.resolve(p)?;
         if let Some(parent) = real.parent() {
             std::fs::create_dir_all(parent).map_err(|e| io_err(p, e))?;
@@ -174,8 +184,9 @@ impl Fs {
             if self.scope == FsScope::AppData {
                 let parent = parent.canonicalize().map_err(|e| io_err(p, e))?;
                 if !parent.starts_with(&self.root) {
-                    return Err(format!(
-                        "permission_denied: {p} is outside the app data dir (fs:app-data)"
+                    return Err(KestrelError::new(
+                        "permission_denied",
+                        format!("{p} is outside the app data dir (fs:app-data)"),
                     ));
                 }
             }
@@ -183,18 +194,18 @@ impl Fs {
         std::fs::write(&real, contents).map_err(|e| io_err(p, e))
     }
 
-    pub fn exists(&self, p: &str) -> Result<bool, String> {
+    pub fn exists(&self, p: &str) -> Result<bool, KestrelError> {
         Ok(self.resolve(p)?.exists())
     }
 }
 
-fn io_err(p: &str, e: std::io::Error) -> String {
-    let code = if e.kind() == std::io::ErrorKind::NotFound {
-        "not_found"
-    } else {
-        "io"
+fn io_err(p: &str, e: std::io::Error) -> KestrelError {
+    let code = match e.kind() {
+        std::io::ErrorKind::NotFound => "not_found",
+        std::io::ErrorKind::PermissionDenied => "permission_denied",
+        _ => "io",
     };
-    format!("{code}: {p}: {e}")
+    KestrelError::new(code, format!("{p}: {e}"))
 }
 
 #[cfg(test)]
@@ -245,7 +256,7 @@ mod tests {
         assert!(fs.root.join("notes/a.txt").is_file());
         assert!(fs.exists("notes/a.txt").unwrap());
         assert!(!fs.exists("nope.txt").unwrap());
-        assert!(fs.read("nope.txt").unwrap_err().starts_with("not_found:"));
+        assert!(fs.read("nope.txt").unwrap_err().code == "not_found");
         // An absolute path inside the root is fine too.
         let abs = fs.root.join("notes/a.txt");
         assert_eq!(fs.read(abs.to_str().unwrap()).unwrap(), "hi");
@@ -258,13 +269,13 @@ mod tests {
         let fs = Fs::new(FsScope::AppData, &base.join("data")).unwrap();
         for p in ["../secret.txt", "../../etc/passwd", "a/../../secret.txt"] {
             let e = fs.read(p).unwrap_err();
-            assert!(e.starts_with("permission_denied:"), "{p}: {e}");
+            assert!(e.code == "permission_denied", "{p}: {e}");
         }
         let outside = base.join("secret.txt");
         let e = fs.read(outside.to_str().unwrap()).unwrap_err();
-        assert!(e.starts_with("permission_denied:"), "{e}");
+        assert!(e.code == "permission_denied", "{e}");
         let e = fs.write(outside.to_str().unwrap(), "x").unwrap_err();
-        assert!(e.starts_with("permission_denied:"), "{e}");
+        assert!(e.code == "permission_denied", "{e}");
         assert_eq!(std::fs::read_to_string(&outside).unwrap(), "s");
     }
 
@@ -279,13 +290,10 @@ mod tests {
             "./.kestrel/x",
         ] {
             let e = fs.write(p, "x").unwrap_err();
-            assert!(e.starts_with("permission_denied:"), "{p}: {e}");
+            assert!(e.code == "permission_denied", "{p}: {e}");
         }
         let abs = fs.root.join(".kestrel/webview/x");
-        assert!(fs
-            .read(abs.to_str().unwrap())
-            .unwrap_err()
-            .starts_with("permission_denied:"));
+        assert!(fs.read(abs.to_str().unwrap()).unwrap_err().code == "permission_denied");
         // Lookalikes are ordinary app data.
         fs.write(".kestrel-notes.txt", "ok").unwrap();
         fs.write("sub/.kestrel/x", "ok").unwrap();
@@ -309,29 +317,14 @@ mod tests {
         symlink(base.join("secret.txt"), fs.root.join("link.txt")).unwrap();
         symlink(base.join("elsewhere"), fs.root.join("dir")).unwrap();
 
-        assert!(fs
-            .read("link.txt")
-            .unwrap_err()
-            .starts_with("permission_denied:"));
-        assert!(fs
-            .write("link.txt", "x")
-            .unwrap_err()
-            .starts_with("permission_denied:"));
+        assert!(fs.read("link.txt").unwrap_err().code == "permission_denied");
+        assert!(fs.write("link.txt", "x").unwrap_err().code == "permission_denied");
         // A new file under a symlinked dir would land outside.
-        assert!(fs
-            .write("dir/new.txt", "x")
-            .unwrap_err()
-            .starts_with("permission_denied:"));
-        assert!(fs
-            .write("dir/deep/new.txt", "x")
-            .unwrap_err()
-            .starts_with("permission_denied:"));
+        assert!(fs.write("dir/new.txt", "x").unwrap_err().code == "permission_denied");
+        assert!(fs.write("dir/deep/new.txt", "x").unwrap_err().code == "permission_denied");
         // A dangling link would be followed by the write.
         symlink(base.join("planted.txt"), fs.root.join("dangling.txt")).unwrap();
-        assert!(fs
-            .write("dangling.txt", "x")
-            .unwrap_err()
-            .starts_with("permission_denied:"));
+        assert!(fs.write("dangling.txt", "x").unwrap_err().code == "permission_denied");
         assert!(!base.join("planted.txt").exists());
         assert!(!base.join("elsewhere/new.txt").exists());
         assert!(!base.join("elsewhere/deep").exists());

@@ -62,6 +62,12 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   `%APPDATA%\<appId>`, `$XDG_DATA_HOME/<appId>`), never the process cwd. Paths
   outside it, `..` and symlink escapes throw `permission_denied`. An ungranted binding
   simply doesn't exist
+- **Every failure is a `KestrelError`.** Generated stubs reject with an exported
+  `KestrelError` carrying a `code` from a closed set (`permission_denied`, `not_found`,
+  `io`, `native_function`, `cancelled`, `unsupported_platform`, `timeout`), a `message`
+  and an optional `detail`, so `err instanceof KestrelError && err.code === "not_found"`
+  works. An uncaught `hostReadFile` miss keeps its `not_found` code; native code can
+  throw an error with its own `code` from the set
 - **Each app gets its own webview storage**, even though every app shares the host
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
   keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on

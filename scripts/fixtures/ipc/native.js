@@ -17,6 +17,14 @@ native.rejects = async () => {
 native.throws = () => {
   throw new Error("sync nope");
 };
+// #19: an uncaught binding error keeps its code; native code can pick one.
+native.readMissing = () => hostReadFile("does-not-exist.txt");
+native.escape = () => hostReadFile("../outside.txt");
+native.cancels = () => {
+  const e = new Error("user cancelled");
+  e.code = "cancelled";
+  throw e;
+};
 native.neverSettles = () => new Promise(() => {});
 native.spin = ({ ms }) => {
   const end = Date.now() + ms;

@@ -11,9 +11,11 @@ use std::{
     sync::Mutex,
 };
 
+mod error;
 mod scope;
 mod serve;
 
+use error::KestrelError;
 use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewUrl, WebviewWindowBuilder};
 
@@ -63,7 +65,7 @@ fn default_height() -> f64 {
 type NativeCall = (
     String, // function name
     String, // args as JSON
-    std::sync::mpsc::Sender<Result<String, String>>,
+    std::sync::mpsc::Sender<Result<String, KestrelError>>,
 );
 
 struct NativeEngine(Option<Mutex<std::sync::mpsc::Sender<NativeCall>>>);
@@ -81,13 +83,24 @@ fn start_native_engine(
         let rt = Runtime::new().expect("quickjs runtime");
         let context = Context::full(&rt).expect("quickjs context");
 
-        let load_error: Option<String> = context.with(|ctx| {
+        let load_error: Option<KestrelError> = context.with(|ctx| {
             let globals = ctx.globals();
             // Host bindings: the privileged surface native functions may touch.
             // Only what the manifest grants is installed; an ungranted
             // binding is absent, not a stub that refuses.
             if let Some(fs) = fs {
-                let throw = |ctx: &Ctx<'_>, msg: String| Exception::throw_message(ctx, &msg);
+                // A thrown binding error is a JS Error with a `code`; a
+                // native function that doesn't catch it passes the code on.
+                let throw = |ctx: &Ctx<'_>, e: KestrelError| -> rquickjs::Error {
+                    match Exception::from_message(ctx.clone(), &e.message) {
+                        Ok(exc) => {
+                            let obj = exc.into_object();
+                            let _ = obj.set("code", e.code);
+                            ctx.throw(obj.into_value())
+                        }
+                        Err(err) => err,
+                    }
+                };
                 let f = fs.clone();
                 globals
                     .set(
@@ -130,42 +143,58 @@ fn start_native_engine(
                 )
                 .expect("bind hostLog");
 
+            let codes = serde_json::to_string(error::CODES).expect("codes");
             ctx.eval::<(), _>(
                 r#"
                 globalThis.native = {};
                 // Calls are serialized per engine (RFC-0001 §4(b)), so one
                 // settle slot is enough. A sync result settles immediately;
                 // a thenable settles once the host drains the job queue.
+                // Every failure settles as a KestrelError JSON string.
                 let __kestrel_slot = null;
                 const __kestrel_json = (v) => JSON.stringify(v === undefined ? null : v);
-                const __kestrel_msg = (e) =>
-                    e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+                function __kestrel_err(e, name) {
+                    const obj = e !== null && typeof e === "object";
+                    const err = {
+                        code: obj && __KESTREL_CODES__.includes(e.code) ? e.code : "native_function",
+                        message: obj && "message" in e ? String(e.message) : String(e),
+                        detail: { function: name },
+                    };
+                    if (obj && e.detail !== undefined) {
+                        try { err.detail = JSON.parse(JSON.stringify(e.detail)); } catch (_) {}
+                    }
+                    return JSON.stringify(err);
+                }
                 function __kestrel_dispatch(name, argsJson) {
                     const fn = globalThis.native[name];
-                    if (typeof fn !== "function") throw new Error("no native function: " + name);
-                    const result = fn(JSON.parse(argsJson));
-                    if (result && typeof result.then === "function") {
-                        const slot = (__kestrel_slot = { done: false });
-                        result.then(
-                            (v) => {
-                                try { slot.ok = __kestrel_json(v); }
-                                catch (e) { slot.err = __kestrel_msg(e); }
-                                slot.done = true;
-                            },
-                            (e) => { slot.err = __kestrel_msg(e); slot.done = true; },
-                        );
-                    } else {
-                        __kestrel_slot = { done: true, ok: __kestrel_json(result) };
+                    if (typeof fn !== "function") {
+                        const e = new Error("no native function: " + name);
+                        e.code = "not_found";
+                        __kestrel_slot = { done: true, err: __kestrel_err(e, name) };
+                        return;
                     }
+                    const slot = (__kestrel_slot = { done: false });
+                    const ok = (v) => {
+                        try { slot.ok = __kestrel_json(v); }
+                        catch (e) { slot.err = __kestrel_err(e, name); }
+                        slot.done = true;
+                    };
+                    const fail = (e) => { slot.err = __kestrel_err(e, name); slot.done = true; };
+                    let result;
+                    try { result = fn(JSON.parse(argsJson)); }
+                    catch (e) { return fail(e); }
+                    if (result && typeof result.then === "function") result.then(ok, fail);
+                    else ok(result);
                 }
-                // "p" pending, "o<json>" resolved, "e<message>" rejected.
+                // "p" pending, "o<json>" resolved, "e<error json>" rejected.
                 function __kestrel_settle() {
                     const s = __kestrel_slot;
                     if (!s || !s.done) return "p";
                     __kestrel_slot = null;
                     return s.err !== undefined ? "e" + s.err : "o" + s.ok;
                 }
-                "#,
+                "#
+                .replace("__KESTREL_CODES__", &codes),
             )
             .expect("prelude");
 
@@ -174,7 +203,12 @@ fn start_native_engine(
             let file = script_path.display();
             let user_src = match std::fs::read_to_string(&script_path) {
                 Ok(src) => src,
-                Err(e) => return Some(format!("cannot read native module {file}: {e}")),
+                Err(e) => {
+                    return Some(KestrelError::new(
+                        "native_function",
+                        format!("cannot read native module {file}: {e}"),
+                    ))
+                }
             };
             match ctx.eval::<(), _>(user_src) {
                 Ok(()) => None,
@@ -188,12 +222,15 @@ fn start_native_engine(
                         .and_then(|x| x.line())
                         .map(|l| format!("{file}:{l}"))
                         .unwrap_or_else(|| file.to_string());
-                    Some(format!("native module failed to load ({at}): {msg}"))
+                    Some(KestrelError::new(
+                        "native_function",
+                        format!("native module failed to load ({at}): {msg}"),
+                    ))
                 }
             }
         });
         if let Some(err) = &load_error {
-            eprintln!("kestrel-host: error: {err}");
+            eprintln!("kestrel-host: error: {}", err.message);
         }
 
         while let Ok((name, args, reply)) = rx.recv() {
@@ -201,42 +238,42 @@ fn start_native_engine(
                 let _ = reply.send(Err(err.clone()));
                 continue;
             }
-            let res = context.with(|ctx| -> Result<String, String> {
-                let js_err = |e: rquickjs::Error| {
-                    // Surface the JS exception message when there is one.
-                    let exc = ctx.catch();
-                    exc.as_exception()
-                        .and_then(|x| x.message())
-                        .unwrap_or_else(|| e.to_string())
-                };
-                let globals = ctx.globals();
-                let dispatch: Function = globals.get("__kestrel_dispatch").map_err(js_err)?;
+            let internal = |e: rquickjs::Error| {
+                KestrelError::new("native_function", e.to_string())
+                    .with_detail(serde_json::json!({ "function": name }))
+            };
+            let res = context.with(|ctx| -> Result<(), KestrelError> {
+                let dispatch: Function =
+                    ctx.globals().get("__kestrel_dispatch").map_err(internal)?;
                 dispatch
                     .call::<_, ()>((name.clone(), args))
-                    .map_err(js_err)?;
-                Ok(name)
+                    .map_err(internal)
             });
             // Drive promises: run queued jobs until the call settles or no
             // work is left. No host async bindings exist yet, so a promise
             // still pending after the queue drains can never settle.
-            let res = res.and_then(|name| {
+            let res = res.and_then(|()| {
                 while rt.is_job_pending() {
                     if rt.execute_pending_job().is_err() {
                         break; // the exception lands in the promise's rejection
                     }
                 }
-                context.with(|ctx| -> Result<String, String> {
-                    let settle: Function = ctx
-                        .globals()
-                        .get("__kestrel_settle")
-                        .map_err(|e| e.to_string())?;
-                    let out: String = settle.call(()).map_err(|e| e.to_string())?;
+                context.with(|ctx| -> Result<String, KestrelError> {
+                    let settle: Function =
+                        ctx.globals().get("__kestrel_settle").map_err(internal)?;
+                    let out: String = settle.call(()).map_err(internal)?;
                     match out.split_at(1) {
                         ("o", json) => Ok(json.to_string()),
-                        ("e", msg) => Err(msg.to_string()),
-                        _ => Err(format!(
-                            "native function `{name}` returned a promise that never settled"
-                        )),
+                        ("e", json) => Err(serde_json::from_str(json).unwrap_or_else(|_| {
+                            KestrelError::new("native_function", json.to_string())
+                        })),
+                        _ => Err(KestrelError::new(
+                            "native_function",
+                            format!(
+                                "native function `{name}` returned a promise that never settled"
+                            ),
+                        )
+                        .with_detail(serde_json::json!({ "function": name }))),
                     }
                 })
             });
@@ -261,21 +298,22 @@ async fn call_native(
     engine: State<'_, NativeEngine>,
     name: String,
     args: serde_json::Value,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, KestrelError> {
+    let stopped = || KestrelError::new("native_function", "native engine stopped");
     let tx = engine
         .0
         .as_ref()
-        .ok_or("this app declares no native module")?;
+        .ok_or_else(|| KestrelError::new("not_found", "this app declares no native module"))?;
     let (rtx, rrx) = std::sync::mpsc::channel();
     tx.lock()
         .unwrap()
         .send((name, args.to_string(), rtx))
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| stopped())?;
     let json = tauri::async_runtime::spawn_blocking(move || rrx.recv())
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|_| "native engine stopped".to_string())??;
-    serde_json::from_str(&json).map_err(|e| e.to_string())
+        .map_err(|_| stopped())?
+        .map_err(|_| stopped())??;
+    serde_json::from_str(&json).map_err(|e| KestrelError::new("native_function", e.to_string()))
 }
 
 /// A loaded manifest with every path resolved and checked.
@@ -462,7 +500,8 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    /// Start an engine on `src` and return a caller: name + args JSON → result.
+    /// Start an engine on `src` and return a caller: name + args JSON →
+    /// result, with errors flattened to "code: message".
     fn engine(src: &str) -> impl Fn(&str, &str) -> Result<String, String> {
         engine_with(src, None)
     }
@@ -471,6 +510,14 @@ mod tests {
         src: &str,
         fs: Option<scope::Fs>,
     ) -> impl Fn(&str, &str) -> Result<String, String> {
+        let call = engine_raw(src, fs);
+        move |name, args| call(name, args).map_err(|e| e.to_string())
+    }
+
+    fn engine_raw(
+        src: &str,
+        fs: Option<scope::Fs>,
+    ) -> impl Fn(&str, &str) -> Result<String, KestrelError> {
         let dir = std::env::temp_dir().join(format!(
             "kestrel-engine-test-{}-{}",
             std::process::id(),
@@ -512,13 +559,61 @@ mod tests {
              native.reject = async () => { throw new Error('async'); };
              native.rejectValue = () => Promise.reject('plain');",
         );
-        assert_eq!(call("boom", "{}"), Err("sync".into()));
-        assert_eq!(call("reject", "{}"), Err("async".into()));
-        assert_eq!(call("rejectValue", "{}"), Err("plain".into()));
+        assert_eq!(call("boom", "{}"), Err("native_function: sync".into()));
+        assert_eq!(call("reject", "{}"), Err("native_function: async".into()));
+        assert_eq!(
+            call("rejectValue", "{}"),
+            Err("native_function: plain".into())
+        );
         assert_eq!(
             call("missing", "{}"),
-            Err("no native function: missing".into())
+            Err("not_found: no native function: missing".into())
         );
+    }
+
+    #[test]
+    fn errors_are_structured_with_codes_and_detail() {
+        let data = app(&[]).join("data");
+        let fs = scope::Fs::new(scope::FsScope::AppData, &data).unwrap();
+        let call = engine_raw(
+            r#"native.read = () => hostReadFile("nope.txt");
+               native.escape = async () => { await null; return hostReadFile("../x"); };
+               native.cancel = () => { const e = new Error("user closed it"); e.code = "cancelled"; e.detail = { step: 2 }; throw e; };
+               native.weird = () => { const e = new Error("hm"); e.code = "EWHATEVER"; throw e; };
+               native.plainObject = () => { throw { code: "timeout", message: "too slow" }; };
+               native.big = () => 1n;"#,
+            Some(fs),
+        );
+        let err = |code: &str, message: &str, detail: serde_json::Value| KestrelError {
+            code: code.into(),
+            message: message.into(),
+            detail: Some(detail),
+        };
+        let f = |name: &str| serde_json::json!({ "function": name });
+        // An uncaught binding error keeps the binding's code.
+        let e = call("read", "{}").unwrap_err();
+        assert_eq!((e.code.as_str(), e.detail), ("not_found", Some(f("read"))));
+        assert!(e.message.starts_with("nope.txt: "), "{}", e.message);
+        assert_eq!(call("escape", "{}").unwrap_err().code, "permission_denied");
+        // Native code can pick a code from the closed set, and a detail.
+        assert_eq!(
+            call("cancel", "{}"),
+            Err(err(
+                "cancelled",
+                "user closed it",
+                serde_json::json!({ "step": 2 })
+            ))
+        );
+        assert_eq!(
+            call("plainObject", "{}"),
+            Err(err("timeout", "too slow", f("plainObject")))
+        );
+        // Codes outside the set are not passed through.
+        assert_eq!(
+            call("weird", "{}"),
+            Err(err("native_function", "hm", f("weird")))
+        );
+        assert_eq!(call("big", "{}").unwrap_err().code, "native_function");
     }
 
     #[test]
@@ -636,7 +731,7 @@ mod tests {
                native.has = ({ p }) => hostExists(p);
                native.dir = () => hostAppDataDir();
                native.escape = () => hostReadFile("../../etc/passwd");
-               native.caught = () => { try { hostReadFile("missing"); } catch (e) { return e.message; } };"#,
+               native.caught = () => { try { hostReadFile("missing"); } catch (e) { return e.code + ": " + e.message; } };"#,
             Some(fs),
         );
         assert_eq!(call("save", r#"{"t":"hi"}"#), Ok(r#""hi""#.into()));

@@ -1,5 +1,10 @@
 const call = (name, args = {}) => window.__TAURI__.core.invoke("call_native", { name, args });
-const outcome = (p) => p.then((value) => ({ ok: true, value }), (e) => ({ ok: false, error: String(e) }));
+// The host rejects with a KestrelError payload: { code, message, detail? }.
+const outcome = (p) =>
+  p.then(
+    (value) => ({ ok: true, value }),
+    (e) => ({ ok: false, code: e?.code, error: e?.message ?? String(e), detail: e?.detail }),
+  );
 
 const results = {};
 for (const [name, args] of [
@@ -11,6 +16,9 @@ for (const [name, args] of [
   ["throws"],
   ["neverSettles"],
   ["missing"],
+  ["readMissing"],
+  ["escape"],
+  ["cancels"],
 ]) results[name] = await outcome(call(name, args));
 
 // #5: while a native call spins for 2 s, the page must keep painting.
