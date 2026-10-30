@@ -16,6 +16,7 @@ mod scope;
 mod serve;
 mod stdlib;
 mod store;
+mod window;
 
 use error::KestrelError;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,10 @@ struct Manifest {
     width: f64,
     #[serde(default = "default_height")]
     height: f64,
+    /// resizable, min/max size, center, decorations, titleBarStyle,
+    /// rememberWindow (#23).
+    #[serde(flatten)]
+    window: window::WindowOptions,
     /// Directory containing the app's built frontend (index.html at its root).
     frontend: String,
     /// Optional "native functions" module: privileged JS run in an embedded
@@ -479,6 +484,11 @@ fn main() {
             .unwrap_or_else(|e| fail(e))
             .with_pick(picks)
     });
+    let window_state = manifest
+        .window
+        .remember_window
+        .then(|| window::WindowState::open(&data_dir));
+    let saver = window_state.clone();
     let webview_dir = scope::webview_data_dir(&data_dir);
     let store_id = scope::webview_store_id(&manifest.app_id);
 
@@ -564,9 +574,44 @@ fn main() {
         ])
         .setup(move |app| {
             let url: tauri::Url = "kestrel://localhost/index.html".parse()?;
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            let opts = &window_cfg.window;
+            // Last run's bounds, if remembered; the position only if it's
+            // still on a display.
+            let saved = window_state.as_ref().and_then(|s| s.saved());
+            let (w, h) = saved.map_or((window_cfg.width, window_cfg.height), |s| {
+                (s.rect.width, s.rect.height)
+            });
+            let (w, h) = opts.clamp(w, h);
+            let displays: Vec<window::Rect> = app
+                .available_monitors()?
+                .iter()
+                .map(|m| {
+                    let (a, s) = (m.work_area(), m.scale_factor());
+                    window::Rect {
+                        x: a.position.x as f64 / s,
+                        y: a.position.y as f64 / s,
+                        width: a.size.width as f64 / s,
+                        height: a.size.height as f64 / s,
+                    }
+                })
+                .collect();
+            let place = saved
+                .map(|s| s.rect)
+                .filter(|r| window::reachable(*r, &displays));
+            let mut builder = opts
+                .apply(WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    WebviewUrl::External(url),
+                ))
                 .title(&window_cfg.title)
-                .inner_size(window_cfg.width, window_cfg.height)
+                .inner_size(w, h);
+            builder = match place {
+                Some(r) => builder.position(r.x, r.y),
+                None if opts.center => builder.center(),
+                None => builder,
+            };
+            let main = builder
                 // Every app shares this binary and the kestrel://localhost
                 // origin, so storage must be split per app explicitly:
                 // a data directory on Windows/Linux, a data store on macOS
@@ -593,6 +638,19 @@ fn main() {
                     tauri::webview::NewWindowResponse::Deny
                 })
                 .build()?;
+            if let Some(state) = window_state {
+                if saved.is_some_and(|s| s.maximized) {
+                    main.maximize()?;
+                }
+                let w = main.clone();
+                // Once now, for a size the min/max bounds changed.
+                state.track(&main);
+                main.on_window_event(move |e| {
+                    if let tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) = e {
+                        state.track(&w);
+                    }
+                });
+            }
             if let Some(ms) = window_cfg.exit_after_ms {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
@@ -602,8 +660,13 @@ fn main() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running kestrel-host");
+        .build(tauri::generate_context!())
+        .expect("error while starting kestrel-host")
+        .run(move |_, event| {
+            if let (tauri::RunEvent::Exit, Some(s)) = (event, &saver) {
+                s.save();
+            }
+        });
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ import net from "node:net";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runTypegen, TypegenError } from "../src/typegen.js";
-import { validateManifest } from "../src/manifest.js";
+import { WINDOW_FIELDS, validateManifest } from "../src/manifest.js";
 import { errorFile, watchNative } from "../src/watch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +46,11 @@ function readManifest(dir) {
         'Use "fs:app-data" unless the app really needs that.',
     );
   return m;
+}
+
+/** The manifest's window options, for the host's runtime manifest. */
+function windowFields(m) {
+  return Object.fromEntries(WINDOW_FIELDS.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
 }
 
 // Prebuilt host from the platform package npm installed alongside kestreljs
@@ -200,6 +205,7 @@ async function dev(dir = ".") {
     version: appVersion(dir, m),
     width: m.width,
     height: m.height,
+    ...windowFields(m),
     frontend: dir, // used only in static mode; host requires it either way
     permissions: m.permissions ?? [],
   };
@@ -323,6 +329,7 @@ async function build(dir = ".") {
     version: appVersion(dir, m),
     width: m.width,
     height: m.height,
+    ...windowFields(m),
     frontend: "app",
     permissions: m.permissions ?? [],
   };

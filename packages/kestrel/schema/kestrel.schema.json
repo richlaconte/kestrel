@@ -38,6 +38,55 @@
       "type": "number",
       "exclusiveMinimum": 0
     },
+    "minWidth": {
+      "description": "Smallest width the user can resize the window to, in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "minHeight": {
+      "description": "Smallest height the user can resize the window to, in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "maxWidth": {
+      "description": "Largest width the user can resize the window to, in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "maxHeight": {
+      "description": "Largest height the user can resize the window to, in logical pixels.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "resizable": {
+      "description": "Whether the user can resize the window.",
+      "type": "boolean",
+      "default": true
+    },
+    "center": {
+      "description": "Center the window on first launch. A remembered position takes precedence.",
+      "type": "boolean",
+      "default": false
+    },
+    "decorations": {
+      "description": "Show the system title bar and borders. Turn off for a frameless window.",
+      "type": "boolean",
+      "default": true
+    },
+    "titleBarStyle": {
+      "description": "macOS only. \"transparent\" shows the window background through the title bar; \"overlay\" also lets the page draw under it (mark a drag region with data-tauri-drag-region). Other platforms always show a normal title bar.",
+      "enum": [
+        "visible",
+        "transparent",
+        "overlay"
+      ],
+      "default": "visible"
+    },
+    "rememberWindow": {
+      "description": "Reopen the window at the size, position and maximized state the user left it in.",
+      "type": "boolean",
+      "default": true
+    },
     "frontend": {
       "description": "A directory with index.html, or a Vite setup.",
       "oneOf": [

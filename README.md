@@ -84,6 +84,12 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   binary and the `kestrel://localhost` origin: localStorage, IndexedDB and cookies are
   keyed by `appId` (a data directory on Windows and Linux, a WKWebView data store on
   macOS 14+; older macOS falls back to one shared store)
+- **Window options live in the manifest:** `resizable`, `minWidth`/`minHeight`,
+  `maxWidth`/`maxHeight`, `center`, `decorations` (off for a frameless window) and, on
+  macOS, `titleBarStyle` (`"transparent"` or `"overlay"`). The window reopens where the
+  user left it: size, position and maximized state, unless that display is gone. Set
+  `"rememberWindow": false` to opt out. macOS apps get the standard app menu, so
+  copy, paste and quit shortcuts work
 - **The React + Vite template has real HMR in the native window.** In dev, the
   `kestrel://` protocol reverse-proxies to Vite (methods, headers and bodies), so the
   window origin and the IPC policy are the same in dev and prod. Only the app's own

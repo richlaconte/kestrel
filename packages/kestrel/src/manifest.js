@@ -1,6 +1,12 @@
 // kestrel.json validation. Mirrors schema/kestrel.schema.json (published for
 // editor autocomplete), with messages that name the field and the fix.
-const FIELDS = ["$schema", "appId", "title", "version", "width", "height", "frontend", "native", "csp", "permissions"];
+/** Window fields the host reads (#23). `dev` and `build` copy them into the runtime manifest. */
+export const WINDOW_FIELDS = [
+  "resizable", "minWidth", "minHeight", "maxWidth", "maxHeight",
+  "center", "decorations", "titleBarStyle", "rememberWindow",
+];
+const FIELDS = ["$schema", "appId", "title", "version", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions"];
+const TITLE_BAR_STYLES = ["visible", "transparent", "overlay"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
 export const PERMISSIONS = ["fs:app-data", "fs:pick", "fs:all", "notifications", "clipboard", "shell:open"];
@@ -23,9 +29,17 @@ export function validateManifest(m) {
     errs.push("`title` must be a non-empty string");
   if (m.version !== undefined && (typeof m.version !== "string" || !m.version))
     errs.push('`version` must be a non-empty string, e.g. "1.0.0"');
-  for (const k of ["width", "height"])
+  for (const k of ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight"])
     if (m[k] !== undefined && !(typeof m[k] === "number" && m[k] > 0))
       errs.push(`\`${k}\` must be a positive number (got ${JSON.stringify(m[k])})`);
+  for (const [lo, hi] of [["minWidth", "maxWidth"], ["minHeight", "maxHeight"], ["minWidth", "width"], ["width", "maxWidth"], ["minHeight", "height"], ["height", "maxHeight"]])
+    if (typeof m[lo] === "number" && typeof m[hi] === "number" && m[lo] > m[hi])
+      errs.push(`\`${lo}\` (${m[lo]}) is larger than \`${hi}\` (${m[hi]})`);
+  for (const k of ["resizable", "center", "decorations", "rememberWindow"])
+    if (m[k] !== undefined && typeof m[k] !== "boolean")
+      errs.push(`\`${k}\` must be true or false (got ${JSON.stringify(m[k])})`);
+  if (m.titleBarStyle !== undefined && !TITLE_BAR_STYLES.includes(m.titleBarStyle))
+    errs.push(`\`titleBarStyle\` must be one of ${TITLE_BAR_STYLES.map((s) => JSON.stringify(s)).join(", ")} (got ${JSON.stringify(m.titleBarStyle)})`);
 
   const f = m.frontend;
   if (f !== undefined) {
