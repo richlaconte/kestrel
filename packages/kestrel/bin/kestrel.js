@@ -4,8 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { runTypegen } from "../src/typegen.js";
+import { runTypegen, TypegenError } from "../src/typegen.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..");
@@ -33,18 +34,57 @@ function readManifest(dir) {
   }
 }
 
+// Prebuilt host from the platform package npm installed alongside kestreljs
+// (an optionalDependency; see scripts/release). Falls back to a local cargo
+// build for framework development.
 function resolveHost() {
+  const exe = process.platform === "win32" ? "kestrel-host.exe" : "kestrel-host";
+  const platformPkg = `kestreljs-host-${process.platform}-${process.arch}`;
+  let prebuilt = null;
+  try {
+    prebuilt = createRequire(import.meta.url).resolve(`${platformPkg}/bin/${exe}`);
+  } catch {}
   const candidates = [
     process.env.KESTREL_HOST,
-    path.join(REPO_ROOT, "host", "target", "release", "kestrel-host"),
-    path.join(REPO_ROOT, "host", "target", "release", "kestrel-host.exe"),
+    prebuilt,
+    path.join(REPO_ROOT, "host", "target", "release", exe),
   ].filter(Boolean);
   for (const c of candidates) if (fs.existsSync(c)) return c;
   die(
-    "host binary not found. Build it once with `npm run build:host` " +
-      "(needs Rust), or set KESTREL_HOST to a prebuilt binary.\n" +
-      "  (In the released framework this is downloaded automatically — you never compile it.)",
+    `no host binary for ${process.platform}-${process.arch}. ` +
+      `It ships as the optional dependency ${platformPkg}: reinstall without ` +
+      "--no-optional/--omit=optional, or set KESTREL_HOST to a host binary. " +
+      "Developing Kestrel itself? Build one with `npm run build:host` (needs Rust).",
   );
+}
+
+// Vite's JS entry from the app's own node_modules. Running it with
+// process.execPath avoids npx and shells entirely: on Windows `npx` is a
+// .cmd, which spawn() refuses without `shell: true` (CVE-2024-27980).
+function resolveVite(dir) {
+  let pkgPath;
+  try {
+    pkgPath = createRequire(path.join(dir, "package.json")).resolve("vite/package.json");
+  } catch {
+    die("vite is not installed in this app — run `npm install` in the app dir first");
+  }
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin.vite;
+  return path.join(path.dirname(pkgPath), bin);
+}
+
+function spawnVite(dir, viteArgs, opts) {
+  return spawn(process.execPath, [resolveVite(dir), ...viteArgs], { cwd: dir, ...opts });
+}
+
+/** End a child and everything it spawned. */
+function killTree(child) {
+  if (!child || child.exitCode !== null) return;
+  try {
+    if (process.platform === "win32")
+      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    else child.kill("SIGTERM");
+  } catch {}
 }
 
 // ---- create ----------------------------------------------------------------
@@ -77,7 +117,15 @@ function create(name) {
 function typegen(dir = ".", { quiet } = {}) {
   dir = path.resolve(dir);
   const m = readManifest(dir);
-  const res = runTypegen(dir, m);
+  let res;
+  try {
+    res = runTypegen(dir, m);
+  } catch (e) {
+    if (e instanceof TypegenError) die(e.message);
+    throw e;
+  }
+  for (const n of res.skipped)
+    console.warn(`\x1b[33mkestrel:\x1b[0m native.ts exports \`${n}\`, which isn't a function — it won't be callable from the webview`);
   if (!quiet) {
     if (!m.native) info("app declares no native module — nothing to generate");
     else info(`generated typed stubs — ${res.names.length} fn(s): ${res.names.join(", ")}`);
@@ -121,16 +169,12 @@ async function dev(dir = ".") {
     info(`starting vite on :${VITE_PORT} …`);
     // stdout ignored on purpose: readiness is detected by HTTP poll, and an
     // inherited/piped stdout makes vite EPIPE-crash noisily at shutdown.
-    // detached: vite gets its own process group so shutdown can kill the
-    // whole tree — killing just the npx wrapper orphans the real vite.
-    vite = spawn("npx", ["vite", "--port", String(VITE_PORT), "--strictPort"], {
-      cwd: dir,
+    vite = spawnVite(dir, ["--port", String(VITE_PORT), "--strictPort"], {
       stdio: ["ignore", "ignore", "inherit"],
-      detached: process.platform !== "win32",
     });
     const up = await waitForServer(`http://localhost:${VITE_PORT}/`);
     if (!up) {
-      vite.kill();
+      killTree(vite);
       die("vite dev server did not come up (is `npm install` done in the app dir?)");
     }
     runtime.devUrl = `http://localhost:${VITE_PORT}/`;
@@ -145,12 +189,7 @@ async function dev(dir = ".") {
   const child = spawn(host, [tmp], { stdio: "inherit", cwd: dir });
   const shutdown = (code) => {
     fs.rmSync(tmp, { force: true });
-    if (vite) {
-      try {
-        if (process.platform === "win32") vite.kill();
-        else process.kill(-vite.pid, "SIGTERM"); // whole process group
-      } catch {}
-    }
+    killTree(vite);
     process.exit(code ?? 0);
   };
   child.on("exit", shutdown);
@@ -165,11 +204,12 @@ async function dev(dir = ".") {
 // built frontend, the compiled native module, and a runtime manifest, all in
 // one folder that runs from anywhere. Signing, installers, and auto-update
 // land on top of this in Phase 2.
-function sh(cmd, argv, cwd) {
+function viteBuild(dir) {
   return new Promise((resolve, reject) => {
-    const c = spawn(cmd, argv, { cwd, stdio: ["ignore", "inherit", "inherit"] });
+    const c = spawnVite(dir, ["build"], { stdio: ["ignore", "inherit", "inherit"] });
+    c.on("error", reject);
     c.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`)),
+      code === 0 ? resolve() : reject(new Error(`vite build exited ${code}`)),
     );
   });
 }
@@ -192,7 +232,7 @@ async function build(dir = ".") {
   let assets;
   if (typeof m.frontend === "object") {
     info("building frontend (vite build)…");
-    await sh("npx", ["vite", "build"], dir);
+    await viteBuild(dir).catch((e) => die(e.message));
     assets = path.resolve(dir, m.frontend.dist ?? "dist");
   } else {
     assets = path.resolve(dir, m.frontend ?? ".");

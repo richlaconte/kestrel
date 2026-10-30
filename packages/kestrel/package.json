@@ -22,5 +22,8 @@
     "bin",
     "src",
     "templates"
-  ]
+  ],
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  }
 }

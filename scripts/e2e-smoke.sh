@@ -6,6 +6,8 @@ set -euo pipefail
 
 TEMPLATE="${1:-react}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Git Bash on Windows: npm and node want C:/… paths, not /c/….
+if command -v cygpath >/dev/null 2>&1; then REPO_ROOT="$(cygpath -m "$REPO_ROOT")"; fi
 KESTREL="node $REPO_ROOT/packages/kestrel/bin/kestrel.js"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

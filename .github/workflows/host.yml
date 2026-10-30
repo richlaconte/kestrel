@@ -41,6 +41,8 @@ jobs:
             librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -52,6 +54,19 @@ jobs:
       - name: Build host
         working-directory: host
         run: cargo build --release
+
+      - name: Format
+        if: runner.os == 'Linux'
+        working-directory: host
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: host
+        run: cargo clippy --release -- -D warnings
+
+      - name: Engine tests
+        working-directory: host
+        run: cargo test --release
 
       - name: Report size
         shell: bash
