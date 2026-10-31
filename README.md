@@ -8,7 +8,7 @@ binary (signed, auto-updating installers are on the [roadmap](https://github.com
 It is a developer-experience layer on [Tauri v2](https://v2.tauri.app): Tauri's runtime
 with better-than-Electron ergonomics.
 
-**Site:** https://richlaconte.github.io/kestrel/ · **Roadmap:** [#36](https://github.com/richlaconte/kestrel/issues/36)
+**Site:** https://richlaconte.github.io/kestrel/ · **Docs:** https://richlaconte.github.io/kestrel/docs/ · **Roadmap:** [#36](https://github.com/richlaconte/kestrel/issues/36)
 
 ```sh
 npx create-kestrel-app my-app
@@ -160,7 +160,9 @@ achievable. Nobody ships both. That's the gap.
 - `packages/create-kestrel-app/` — the `npx create-kestrel-app` wrapper.
 - `packages/kestrel-native/` — the typed client runtime apps import.
 - `examples/quick-note/` — the canonical tiny app.
-- `docs/` — RFCs, spike findings, release process.
+- `docs/` — the guides (`docs/guide/`), shipping docs, RFCs, spike findings, release
+  process. `scripts/docs/` renders them, plus reference pages generated from the
+  `.d.ts` files and the manifest schema, into the docs site.
 - `scripts/` — end-to-end tests (`e2e-*.sh`) and release tooling.
 
 ## Developing
@@ -174,6 +176,7 @@ node packages/kestrel/bin/kestrel.js dev demo
 npm test                                # CLI, typegen and kestrel-native unit tests
 npm run lint                            # Biome lint + format check (CI runs it)
 npm run format                          # apply Biome's formatting
+npm run docs                            # build the site and docs into _site/
 (cd host && cargo test --release)       # host tests
 (cd host && cargo fmt --check && cargo clippy --all-targets -- -D warnings)
 bash scripts/e2e-ipc.sh                 # end-to-end (needs a display; xvfb-run on Linux)

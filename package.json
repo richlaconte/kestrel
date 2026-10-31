@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "build:host": "cd host && cargo build --release",
-    "test": "npm test --workspaces --if-present",
+    "test": "npm test --workspaces --if-present && node --test \"scripts/docs/*.test.mjs\"",
+    "docs": "node scripts/docs/build.mjs",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
