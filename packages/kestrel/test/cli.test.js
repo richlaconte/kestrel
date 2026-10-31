@@ -113,3 +113,17 @@ test("fs:all prints a loud warning; fs:app-data does not", () => {
     assert.equal(/`fs:all` lets native code read and write every file/.test(res.stderr), warns, perm);
   }
 });
+
+test("--help exits 0; --version prints the package version", () => {
+  for (const flag of ["--help", "-h"]) {
+    const r = run([flag]);
+    assert.equal(r.status, 0, flag);
+    assert.match(r.stdout, /kestrel build \[dir\]/);
+  }
+  const { version } = JSON.parse(fs.readFileSync(path.join(path.dirname(CLI), "..", "package.json"), "utf8"));
+  for (const flag of ["--version", "-v"]) {
+    const r = run([flag]);
+    assert.equal(r.status, 0, flag);
+    assert.equal(r.stdout.trim(), version);
+  }
+});

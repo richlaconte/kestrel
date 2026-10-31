@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"IPC for kestrel-hosted windows. Only the app's own kestrel:// origin is local; no remote origin gets IPC, even in dev (the dev server is proxied through kestrel://).","local":true,"windows":["*"],"permissions":["core:default"]}}

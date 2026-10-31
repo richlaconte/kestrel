@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/richlaconte/kestrel/security/advisories/new
+    about: Report it privately, not in a public issue. See SECURITY.md.
+  - name: Docs
+    url: https://richlaconte.github.io/kestrel/docs/
+    about: Guides and the API reference.
