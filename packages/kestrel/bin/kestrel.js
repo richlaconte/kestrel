@@ -397,6 +397,18 @@ async function build(dir = ".") {
     fs.writeFileSync(path.join(layout.resources, "icon.icns"), icons.icns);
     signed = signMac(out);
   }
+  let winSigning;
+  if (process.platform === "win32") {
+    const plan = win.signingPlan();
+    if (plan.orphanPassword) warn("KESTREL_WIN_SIGN_PASSWORD is set but KESTREL_WIN_SIGN_PFX isn't; not signing");
+    const signtool = plan.pfx ? win.findSigntool() : null;
+    if (plan.pfx && !signtool) die("KESTREL_WIN_SIGN_PFX is set but signtool wasn't found: install the Windows SDK");
+    if (signtool) {
+      winSign(signtool, plan, layout.exe);
+      signed = "signed";
+    }
+    winSigning = { signtool, plan };
+  }
 
   const rel = path.relative(process.cwd(), out);
   const mb = (dirSize(out) / 1024 / 1024).toFixed(1);
@@ -413,16 +425,10 @@ async function build(dir = ".") {
   const linuxOut = process.platform === "linux" && ["--deb", "--appimage"].some((f) => args.includes(f));
   if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
   if (process.platform === "linux" && args.includes("--appimage")) await makeAppImage(dir, m, out, version, icons);
-  if (process.platform === "win32") {
-    const plan = win.signingPlan();
-    if (plan.orphanPassword) warn("KESTREL_WIN_SIGN_PASSWORD is set but KESTREL_WIN_SIGN_PFX isn't; not signing");
-    const signtool = plan.pfx ? win.findSigntool() : null;
-    if (plan.pfx && !signtool) die("KESTREL_WIN_SIGN_PFX is set but signtool wasn't found: install the Windows SDK");
-    if (signtool) winSign(signtool, plan, layout.exe);
-    if (args.includes("--installer")) makeWinInstaller(dir, m, out, version, signtool, plan);
-    else console.log(`  note: ${signtool ? "signed" : "unsigned"} portable build. Add --installer for a setup.exe.`);
-  }
-  else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
+  if (winSigning) {
+    if (args.includes("--installer")) makeWinInstaller(dir, m, out, version, winSigning.signtool, winSigning.plan);
+    else console.log("  note: portable build. Add --installer for a setup.exe.");
+  } else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
 }
 
 function readPackageJson(dir) {

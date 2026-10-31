@@ -26,6 +26,9 @@ jobs:
 
   smoke:
     name: create → dev → IPC → build (${{ matrix.os }})
+    # A GUI left waiting for input (an installer, a dialog) fails the job
+    # instead of holding a runner for six hours.
+    timeout-minutes: 45
     strategy:
       # Each platform tells us something different; never cancel the others.
       fail-fast: false

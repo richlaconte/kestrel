@@ -141,10 +141,12 @@ if [ -n "$WINDOWS" ]; then
     [ "$(signer "$f" | tr -d '\r')" = "CN=Kestrel e2e" ] || { echo "FAIL: $f isn't signed" >&2; exit 1; }
   done
   KEY='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\smoke-app'
-  "$SETUP" /S
+  # Git Bash would turn a bare /S into the path S:/ and the installer would
+  # wait on its GUI; the timeout catches any GUI that opens anyway.
+  MSYS2_ARG_CONV_EXCL='*' timeout 300 "$SETUP" /S
   INST_WIN="$(MSYS2_ARG_CONV_EXCL='*' reg query "$KEY" /v InstallLocation | tr -d '\r' | sed -n 's/.*REG_SZ *//p')"
   INST="$(cygpath -u "$INST_WIN")"
-  trap 'rc=$?; [ -x "$INST/uninstall.exe" ] && MSYS2_ARG_CONV_EXCL="*" "$INST/uninstall.exe" /S "_?=$INST_WIN"; rm_tree "$WORK"; exit $rc' EXIT
+  trap 'rc=$?; [ -x "$INST/uninstall.exe" ] && MSYS2_ARG_CONV_EXCL="*" timeout 300 "$INST/uninstall.exe" /S "_?=$INST_WIN"; rm_tree "$WORK"; exit $rc' EXIT
   case "$INST_WIN" in *\\AppData\\Local\\Programs\\smoke-app) ;; *) echo "FAIL: installed to $INST_WIN" >&2; exit 1 ;; esac
   test -f "$INST/smoke-app.exe" && test -f "$INST/kestrel.json" && test -f "$INST/icon.ico" && test -f "$INST/app/index.html"
   [ "$(signer "$INST/uninstall.exe" | tr -d '\r')" = "CN=Kestrel e2e" ] || { echo "FAIL: the uninstaller isn't signed" >&2; exit 1; }
@@ -154,7 +156,7 @@ if [ -n "$WINDOWS" ]; then
   ( cd / && KESTREL_EXIT_AFTER_MS=12000 "$INST/smoke-app.exe" )
   [ "$(visits)" -eq $((before + 1)) ] || { echo "FAIL: the installed app's IPC never ran" >&2; exit 1; }
   # _?= runs the uninstaller in place and waits; it can't delete itself.
-  MSYS2_ARG_CONV_EXCL='*' "$INST/uninstall.exe" /S "_?=$INST_WIN"
+  MSYS2_ARG_CONV_EXCL='*' timeout 300 "$INST/uninstall.exe" /S "_?=$INST_WIN"
   ! MSYS2_ARG_CONV_EXCL='*' reg query "$KEY" >/dev/null 2>&1 || { echo "FAIL: the uninstall key is still there" >&2; exit 1; }
   test ! -e "$LNK" || { echo "FAIL: the shortcut is still there" >&2; exit 1; }
   test ! -e "$INST/smoke-app.exe" || { echo "FAIL: the app is still installed" >&2; exit 1; }
