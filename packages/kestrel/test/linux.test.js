@@ -224,7 +224,9 @@ test("the AppImage runtime is verified, cached, and overridable", async () => {
   fs.rmSync(cacheDir, { recursive: true });
 });
 
-test("appDir lays out AppRun, the desktop entry and icons", () => {
+// Linux-only, and it makes symlinks, which Windows rewrites with backslashes
+// (and allows only with Developer Mode or admin).
+test("appDir lays out AppRun, the desktop entry and icons", { skip: process.platform === "win32" && "symlinks on Windows" }, () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-appdir-"));
   const dir = path.join(tmp, "portable");
   fs.mkdirSync(path.join(dir, "app"), { recursive: true });
