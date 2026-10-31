@@ -13,6 +13,7 @@ import { errorFile, watchNative } from "../src/watch.js";
 import { IconError, makeIcons } from "../src/icons.js";
 import * as linux from "../src/linux.js";
 import * as macos from "../src/macos.js";
+import * as pe from "../src/pe.js";
 import * as updater from "../src/updater.js";
 import * as win from "../src/windows.js";
 
@@ -356,6 +357,7 @@ async function build(dir = ".") {
 
   fs.copyFileSync(host, layout.exe);
   fs.chmodSync(layout.exe, 0o755);
+  if (process.platform === "win32") setExeResources(layout.exe, m, version, icons.ico, readPackageJson(dir));
   // A frontend of "." holds the build output, dependencies and dotfiles
   // too. Entry by entry: cpSync refuses to copy a folder into itself.
   const skip = new Set([path.join(dir, "build"), path.join(dir, "node_modules")]);
@@ -572,6 +574,34 @@ async function makeAppImage(dir, m, out, version, icons) {
   }
   info(`built ${path.relative(process.cwd(), dest)} — ${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB`);
   return dest;
+}
+
+/**
+ * Give the app's .exe its own icon and version info, so Explorer, file
+ * properties and the taskbar show the app rather than Kestrel (#25).
+ */
+function setExeResources(exe, m, version, ico, pkg) {
+  const publisher = win.publisherOf(pkg, m);
+  try {
+    const patched = pe.setResources(fs.readFileSync(exe), {
+      ico,
+      version,
+      strings: {
+        CompanyName: publisher,
+        FileDescription: m.title,
+        FileVersion: version,
+        InternalName: m.appId,
+        LegalCopyright: publisher,
+        OriginalFilename: `${m.appId}.exe`,
+        ProductName: m.title,
+        ProductVersion: version,
+      },
+    });
+    fs.writeFileSync(exe, patched);
+  } catch (e) {
+    if (!(e instanceof pe.PeError)) throw e;
+    warn(`the .exe keeps Kestrel's icon and version info: ${e.message}`);
+  }
 }
 
 function winSign(signtool, plan, file) {
