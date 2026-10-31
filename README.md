@@ -126,8 +126,13 @@ What works today (CI runs the end-to-end flow on Linux, macOS and Windows):
   best). `build` writes `.icns`, `.ico` and every PNG size to `build/icons/`, and the
   window uses it in dev too. Apps without one get the Kestrel icon
 
-Not built yet (see the [roadmap](https://github.com/richlaconte/kestrel/issues/36)):
-auto-update. See
+- **Auto-update:** `updater.check()` / `updater.apply()` against a feed you host. Every
+  download is verified with an Ed25519 key compiled into the app, then the app replaces
+  itself and relaunches (`.app`, AppImage, Windows installer). `kestrel updater keygen`
+  makes the key and `kestrel build` signs the update. See
+  [docs/UPDATES.md](docs/UPDATES.md)
+
+See the [roadmap](https://github.com/richlaconte/kestrel/issues/36) for what's next. See
 [docs/rfc-0001-native-api.md](docs/rfc-0001-native-api.md) for the v0 API design and
 [docs/FINDINGS.md](docs/FINDINGS.md) / [docs/FRICTION.md](docs/FRICTION.md) for the
 measured evidence behind the bets.

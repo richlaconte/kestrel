@@ -168,6 +168,27 @@
           }
         ]
       }
+    },
+    "updater": {
+      "description": "Auto-update (#28): where the app looks for new versions, and the public key that signs them. Make the key pair with `kestrel updater keygen`.",
+      "type": "object",
+      "required": [
+        "endpoint",
+        "pubkey"
+      ],
+      "properties": {
+        "endpoint": {
+          "description": "The update feed (latest.json): an https URL, or http to localhost for testing.",
+          "type": "string",
+          "format": "uri"
+        },
+        "pubkey": {
+          "description": "The Ed25519 public key `kestrel updater keygen` printed, base64.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

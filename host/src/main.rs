@@ -17,6 +17,7 @@ mod serve;
 mod stdlib;
 mod store;
 mod tray;
+mod updater;
 mod window;
 
 use error::KestrelError;
@@ -63,6 +64,9 @@ struct Manifest {
     /// bindings beyond logging, a pure sandboxed webview.
     #[serde(default)]
     permissions: Vec<String>,
+    /// Where updates come from and the key that signs them (#28).
+    #[serde(default)]
+    updater: Option<updater::UpdaterConfig>,
     /// Dev only: reload the native module from disk whenever a
     /// `reload-native` line arrives on stdin. `kestrel dev` sends one after
     /// it recompiles native.ts.
@@ -655,6 +659,8 @@ fn main() {
             stdlib::shell_open,
             tray::tray_create,
             tray::tray_destroy,
+            updater::updater_check,
+            updater::updater_apply,
         ])
         .setup(move |app| {
             let _ = app_handle.set(app.handle().clone());
@@ -770,9 +776,12 @@ mod tests {
         src: &str,
         fs: Option<scope::Fs>,
     ) -> impl Fn(&str, &str) -> Result<String, KestrelError> {
+        // Unique per call: Windows' clock can repeat between quick calls.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "kestrel-engine-test-{}-{}",
+            "kestrel-engine-test-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -964,9 +973,13 @@ mod tests {
 
     /// Write files into a fresh dir and return it.
     fn app(files: &[(&str, &str)]) -> PathBuf {
+        // The counter keeps names apart: Windows' clock can return the same
+        // time to calls in quick succession.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "kestrel-prepare-{}-{}",
+            "kestrel-prepare-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

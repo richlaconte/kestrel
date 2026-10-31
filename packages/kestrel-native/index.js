@@ -137,3 +137,13 @@ export const tray = {
       if (p.kind === "click") cb();
     }),
 };
+
+/**
+ * updater — new versions from the feed in kestrel.json `updater`, verified
+ * against its public key. `check` resolves to the newer version or null;
+ * `apply` installs it, quits and starts the new version.
+ */
+export const updater = {
+  check: () => invoke("updater_check"),
+  apply: () => invoke("updater_apply"),
+};

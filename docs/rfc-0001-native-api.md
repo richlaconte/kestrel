@@ -67,7 +67,7 @@ Small on purpose; each module earned its place in the friction log or the plan's
 | `clipboard` | `readText()`, `writeText(s)` | `clipboard` |
 | `shell` | `open(url)` | `shell:open`; http, https and mailto only; no arbitrary exec in v0 |
 | `tray` | `create({ tooltip, title, menu, closeToTray, menuOnLeftClick })`, `destroy()`, `onMenu(cb)`, `onClick(cb)` | `tray`; menu = typed item list; the icon is the app's |
-| `updater` | `check()`, `apply()` | Phase 2; present in types from day one |
+| `updater` | `check()`, `apply()` | none; needs `updater` in kestrel.json; Ed25519-signed feed (docs/UPDATES.md) |
 
 These calls go straight from the webview to the host's compiled-in command surface
 (spike-proven path). They work with **no `native.ts` at all** — most apps should need
