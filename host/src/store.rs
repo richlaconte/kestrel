@@ -102,9 +102,12 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn tmp() -> PathBuf {
+        // Unique per call: Windows' clock can repeat between quick calls.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         std::env::temp_dir().join(format!(
-            "kestrel-store-{}-{}",
+            "kestrel-store-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

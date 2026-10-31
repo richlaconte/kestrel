@@ -776,9 +776,12 @@ mod tests {
         src: &str,
         fs: Option<scope::Fs>,
     ) -> impl Fn(&str, &str) -> Result<String, KestrelError> {
+        // Unique per call: Windows' clock can repeat between quick calls.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "kestrel-engine-test-{}-{}",
+            "kestrel-engine-test-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -970,9 +973,13 @@ mod tests {
 
     /// Write files into a fresh dir and return it.
     fn app(files: &[(&str, &str)]) -> PathBuf {
+        // The counter keeps names apart: Windows' clock can return the same
+        // time to calls in quick succession.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "kestrel-prepare-{}-{}",
+            "kestrel-prepare-{}-{}-{}",
             std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
