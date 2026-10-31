@@ -21,6 +21,10 @@ export declare class KestrelError extends Error {
  */
 export declare function on(event: string, cb: (payload: unknown) => void): () => void;
 
+/**
+ * Call a native function by name. The generated native-client stubs call
+ * this for you, with types; use it only where they can't reach.
+ */
 export declare function callNative(name: string, args?: Record<string, unknown>): Promise<unknown>;
 
 export declare const app: {

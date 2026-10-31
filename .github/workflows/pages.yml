@@ -3,7 +3,16 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    # The docs are built from these, so a change to any of them redeploys.
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "scripts/docs/**"
+      - "packages/kestrel-native/index.d.ts"
+      - "packages/kestrel/native/host.d.ts"
+      - "packages/kestrel/schema/**"
+      - "packages/kestrel/bin/kestrel.js"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -23,9 +32,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install
+      # The landing page plus the docs, rendered from docs/ and the type definitions.
+      - run: npm run docs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -1,6 +1,7 @@
 node_modules/
 host/target/
 dist/
+_site/
 .kestrel/
 *.tar.gz
 .DS_Store
