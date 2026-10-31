@@ -35,8 +35,5 @@ editJson("packages/kestrel/templates/react/package.json", (j) => {
 editJson("host/tauri.conf.json", (j) => (j.version = version));
 
 const cargo = path.join(ROOT, "host/Cargo.toml");
-fs.writeFileSync(
-  cargo,
-  fs.readFileSync(cargo, "utf8").replace(/^version = ".*"$/m, `version = "${version}"`),
-);
+fs.writeFileSync(cargo, fs.readFileSync(cargo, "utf8").replace(/^version = ".*"$/m, `version = "${version}"`));
 console.log(`set version ${version}`);

@@ -4,10 +4,32 @@ import { validateUpdater } from "./updater.js";
 
 /** Window fields the host reads (#23). `dev` and `build` copy them into the runtime manifest. */
 export const WINDOW_FIELDS = [
-  "resizable", "minWidth", "minHeight", "maxWidth", "maxHeight",
-  "center", "decorations", "titleBarStyle", "rememberWindow",
+  "resizable",
+  "minWidth",
+  "minHeight",
+  "maxWidth",
+  "maxHeight",
+  "center",
+  "decorations",
+  "titleBarStyle",
+  "rememberWindow",
 ];
-const FIELDS = ["$schema", "appId", "title", "version", "bundleId", "icon", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions", "updater"];
+const FIELDS = [
+  "$schema",
+  "appId",
+  "title",
+  "version",
+  "bundleId",
+  "icon",
+  "width",
+  "height",
+  ...WINDOW_FIELDS,
+  "frontend",
+  "native",
+  "csp",
+  "permissions",
+  "updater",
+];
 const TITLE_BAR_STYLES = ["visible", "transparent", "overlay"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
@@ -15,8 +37,7 @@ export const PERMISSIONS = ["fs:app-data", "fs:pick", "fs:all", "notifications",
 
 /** Return a list of human-readable problems; empty means valid. */
 export function validateManifest(m) {
-  if (typeof m !== "object" || m === null || Array.isArray(m))
-    return ["kestrel.json must be a JSON object"];
+  if (typeof m !== "object" || m === null || Array.isArray(m)) return ["kestrel.json must be a JSON object"];
   const errs = [];
   const need = (k, hint) => {
     if (m[k] === undefined) errs.push(`\`${k}\` is required — ${hint}`);
@@ -29,7 +50,10 @@ export function validateManifest(m) {
     errs.push(`\`appId\` must be lowercase letters, digits, dots and dashes (got ${JSON.stringify(m.appId)})`);
   if (m.title !== undefined && (typeof m.title !== "string" || !m.title))
     errs.push("`title` must be a non-empty string");
-  if (m.bundleId !== undefined && (typeof m.bundleId !== "string" || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(m.bundleId)))
+  if (
+    m.bundleId !== undefined &&
+    (typeof m.bundleId !== "string" || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(m.bundleId))
+  )
     errs.push(`\`bundleId\` must be reverse-DNS, like "com.example.my-app" (got ${JSON.stringify(m.bundleId)})`);
   if (m.icon !== undefined && (typeof m.icon !== "string" || !/\.png$/i.test(m.icon)))
     errs.push('`icon` must be a path to a square PNG, ideally 1024×1024 (e.g. "icon.png")');
@@ -38,14 +62,23 @@ export function validateManifest(m) {
   for (const k of ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight"])
     if (m[k] !== undefined && !(typeof m[k] === "number" && m[k] > 0))
       errs.push(`\`${k}\` must be a positive number (got ${JSON.stringify(m[k])})`);
-  for (const [lo, hi] of [["minWidth", "maxWidth"], ["minHeight", "maxHeight"], ["minWidth", "width"], ["width", "maxWidth"], ["minHeight", "height"], ["height", "maxHeight"]])
+  for (const [lo, hi] of [
+    ["minWidth", "maxWidth"],
+    ["minHeight", "maxHeight"],
+    ["minWidth", "width"],
+    ["width", "maxWidth"],
+    ["minHeight", "height"],
+    ["height", "maxHeight"],
+  ])
     if (typeof m[lo] === "number" && typeof m[hi] === "number" && m[lo] > m[hi])
       errs.push(`\`${lo}\` (${m[lo]}) is larger than \`${hi}\` (${m[hi]})`);
   for (const k of ["resizable", "center", "decorations", "rememberWindow"])
     if (m[k] !== undefined && typeof m[k] !== "boolean")
       errs.push(`\`${k}\` must be true or false (got ${JSON.stringify(m[k])})`);
   if (m.titleBarStyle !== undefined && !TITLE_BAR_STYLES.includes(m.titleBarStyle))
-    errs.push(`\`titleBarStyle\` must be one of ${TITLE_BAR_STYLES.map((s) => JSON.stringify(s)).join(", ")} (got ${JSON.stringify(m.titleBarStyle)})`);
+    errs.push(
+      `\`titleBarStyle\` must be one of ${TITLE_BAR_STYLES.map((s) => JSON.stringify(s)).join(", ")} (got ${JSON.stringify(m.titleBarStyle)})`,
+    );
 
   const f = m.frontend;
   if (f !== undefined) {
@@ -77,7 +110,6 @@ export function validateManifest(m) {
 
   if (m.updater !== undefined) errs.push(...validateUpdater(m.updater));
 
-  for (const k of Object.keys(m))
-    if (!FIELDS.includes(k)) errs.push(`\`${k}\` is not a known field`);
+  for (const k of Object.keys(m)) if (!FIELDS.includes(k)) errs.push(`\`${k}\` is not a known field`);
   return errs;
 }

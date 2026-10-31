@@ -30,9 +30,7 @@ function typecheck(dir) {
     strict: true,
     noEmit: true,
   });
-  return ts
-    .getPreEmitDiagnostics(program)
-    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+  return ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
 }
 
 function assertCompiles(dir) {
@@ -228,7 +226,9 @@ test("kestreljs/native/host maps onto the host's bindings (#20)", async () => {
   const logged = [];
   const native = load(res, {
     hostReadFile: (p) => files[p],
-    hostWriteFile: (p, c) => void (files[p] = c),
+    hostWriteFile: (p, c) => {
+      files[p] = c;
+    },
     hostExists: (p) => p in files,
     hostLog: (m) => logged.push(m),
   });
@@ -236,14 +236,17 @@ test("kestreljs/native/host maps onto the host's bindings (#20)", async () => {
   assert.deepEqual(logged, ['wrote {"n":1}']);
 
   // No fs grant: the bindings are absent and calls reject with a code.
-  const e = await load(res, { hostLog() {} }).roundTrip().catch((x) => x);
+  const e = await load(res, { hostLog() {} })
+    .roundTrip()
+    .catch((x) => x);
   assert.equal(e.code, "permission_denied");
   assert.match(e.message, /fs\.writeText needs the "fs:app-data", "fs:pick" or "fs:all" permission/);
 });
 
 test("importing a Node built-in fails with a pointed message (#20)", () => {
   assert.throws(
-    () => gen(`import { readFileSync } from "node:fs";\nexport function f(): string { return readFileSync("x", "utf8"); }`),
+    () =>
+      gen(`import { readFileSync } from "node:fs";\nexport function f(): string { return readFileSync("x", "utf8"); }`),
     (e) =>
       e instanceof TypegenError &&
       /native\.ts:1:\d+: "node:fs" is a Node\.js module/.test(e.message) &&
@@ -291,9 +294,11 @@ test("syntax errors in native.ts are reported with native.ts line and column", (
 async function loadClient(file, invokeImpl) {
   let src = fs.readFileSync(file, "utf8");
   if (file.endsWith(".ts"))
-    src = ts.transpileModule(src, {
-      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
-    }).outputText.replace(/^import type .*$/m, "");
+    src = ts
+      .transpileModule(src, {
+        compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
+      })
+      .outputText.replace(/^import type .*$/m, "");
   globalThis.window = { __TAURI__: { core: { invoke: invokeImpl }, event: fakeEvents } };
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));
 }
@@ -342,14 +347,20 @@ test("TS client rejects with an exported KestrelError (#19)", async () => {
 
 test("JS client rejects with an exported KestrelError (#19)", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
-  fs.writeFileSync(path.join(dir, "native.js"), "native.ok = () => 1;\nnative.denied = () => 1;\nnative.other = () => 1;\n");
+  fs.writeFileSync(
+    path.join(dir, "native.js"),
+    "native.ok = () => 1;\nnative.denied = () => 1;\nnative.other = () => 1;\n",
+  );
   runTypegen(dir, { native: "native.js" });
   await assertKestrelErrors(await loadClient(path.join(dir, "native-client.js"), fakeHost));
 });
 
 test("KestrelError and KestrelErrorCode are reserved export names", () => {
   assert.throws(() => gen("export function KestrelError() {}\n"), /`KestrelError` is reserved/);
-  assert.throws(() => gen("export interface KestrelErrorCode { a: 1 }\nexport const f = (x: KestrelErrorCode) => 1;\n"), /`KestrelErrorCode` is reserved/);
+  assert.throws(
+    () => gen("export interface KestrelErrorCode { a: 1 }\nexport const f = (x: KestrelErrorCode) => 1;\n"),
+    /`KestrelErrorCode` is reserved/,
+  );
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-typegen-"));
   fs.writeFileSync(path.join(dir, "native.js"), "native.KestrelError = () => 1;\n");
   assert.throws(() => runTypegen(dir, { native: "native.js" }), /`native.KestrelError` is reserved/);
@@ -359,10 +370,16 @@ test("host, typegen and kestrel-native agree on the error codes", () => {
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
   const rs = fs.readFileSync(path.join(repo, "host", "src", "error.rs"), "utf8");
   const host = rs.match(/pub const CODES: &\[&str\] = &\[([^\]]*)\]/)[1];
-  assert.deepEqual([...host.matchAll(/"([^"]+)"/g)].map((x) => x[1]), ERROR_CODES);
+  assert.deepEqual(
+    [...host.matchAll(/"([^"]+)"/g)].map((x) => x[1]),
+    ERROR_CODES,
+  );
   const dts = fs.readFileSync(path.join(repo, "packages", "kestrel-native", "index.d.ts"), "utf8");
   const union = dts.match(/export type KestrelErrorCode =([^;]*);/)[1];
-  assert.deepEqual([...union.matchAll(/"([^"]+)"/g)].map((x) => x[1]), ERROR_CODES);
+  assert.deepEqual(
+    [...union.matchAll(/"([^"]+)"/g)].map((x) => x[1]),
+    ERROR_CODES,
+  );
 });
 
 /** Type-check native.ts, the client and `use.ts`, with kestreljs/native/host resolvable. */
@@ -397,10 +414,16 @@ test("an exported Events map types emit and on (#22)", () => {
   assert.match(client, /export function on<K extends keyof Events & string>/);
   assert.deepEqual(res.names, ["work"]);
   assert.deepEqual(
-    typecheckWith(dir, `import { on } from "./native-client";\nconst off: () => void = on("progress", (p) => p.done.toFixed());\noff();\n`),
+    typecheckWith(
+      dir,
+      `import { on } from "./native-client";\nconst off: () => void = on("progress", (p) => p.done.toFixed());\noff();\n`,
+    ),
     [],
   );
-  const wrong = typecheckWith(dir, `import { on } from "./native-client";\non("progres", () => {});\non("progress", (p) => p.nope);\n`);
+  const wrong = typecheckWith(
+    dir,
+    `import { on } from "./native-client";\non("progres", () => {});\non("progress", (p) => p.nope);\n`,
+  );
   assert.equal(wrong.length, 2, wrong.join("\n"));
   fs.writeFileSync(path.join(dir, "native.ts"), EVENTS_SRC.replace("{ done: 1, total: 2 }", '{ done: "1", total: 2 }'));
   assert.equal(typecheckWith(dir, "").length, 1, "emit checks the payload against Events");
@@ -418,7 +441,10 @@ test("emit reaches on in the client, filtered by name, until unsubscribed (#22)"
   const sent = [];
   const native = load(res, { hostEmit: (e, json) => sent.push([e, JSON.parse(json)]) });
   assert.equal(native.work(), 2);
-  assert.deepEqual(sent, [["progress", { done: 1, total: 2 }], ["finished", null]]);
+  assert.deepEqual(sent, [
+    ["progress", { done: 1, total: 2 }],
+    ["finished", null],
+  ]);
   const { emit } = await import("../native/host.js");
   assert.throws(() => emit("", 1), /event name must be a non-empty string/);
 

@@ -1,7 +1,7 @@
 // Typed stubs generated from native.js by `kestrel typegen`:
 import { greet, visitCount } from "./native-client.js";
 
-visitCount().then(n => {
+visitCount().then((n) => {
   document.getElementById("visits").textContent =
     `you have opened this app ${n} time${n === 1 ? "" : "s"} (persisted by native.js)`;
 });

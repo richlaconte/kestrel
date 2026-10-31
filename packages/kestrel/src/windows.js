@@ -21,7 +21,12 @@ const WEBVIEW2_BOOTSTRAPPER = "https://go.microsoft.com/fwlink/p/?LinkId=2124703
 const DEFAULT_TIMESTAMP = "http://timestamp.digicert.com";
 
 /** A folder- and file-name-safe name from the title. */
-export const installNameOf = (m) => m.title.replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-").replace(/[. ]+$/, "").trim() || m.appId;
+export const installNameOf = (m) =>
+  m.title
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Windows forbids control characters in file names.
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-")
+    .replace(/[. ]+$/, "")
+    .trim() || m.appId;
 
 /** `build/<Title>-<version>-<arch>-setup.exe`'s file name. */
 export const installerNameOf = (m, version, arch = process.arch) =>
@@ -29,7 +34,9 @@ export const installerNameOf = (m, version, arch = process.arch) =>
 
 /** Windows version resources want four numbers: "1.2.3-beta" → "1.2.3.0". */
 export function fileVersionOf(version) {
-  const nums = String(version).split(/[.+-]/).map((p) => (/^\d+$/.test(p) ? Math.min(Number(p), 65535) : null));
+  const nums = String(version)
+    .split(/[.+-]/)
+    .map((p) => (/^\d+$/.test(p) ? Math.min(Number(p), 65535) : null));
   const lead = [];
   for (const n of nums) {
     if (n === null || lead.length === 4) break;
@@ -46,14 +53,20 @@ export function fileVersionOf(version) {
 // `ct` for the second.
 
 /** Text inside a runtime NSIS string: `$` and `"` escaped, on one line. */
-export const esc = (s) => String(s).replace(/[\r\n]+/g, " ").replace(/\$/g, "$$$$").replace(/"/g, '$\\"');
+export const esc = (s) =>
+  String(s)
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\$/g, "$$$$")
+    .replace(/"/g, '$\\"');
 
 /** A quoted runtime NSIS string holding `s` literally. */
 export const nsis = (s) => `"${esc(s)}"`;
 
 /** A quoted compile-time NSIS string: `s` in a quote it doesn't contain. */
 export function ct(s) {
-  const text = String(s).replace(/[\r\n]+/g, " ").replace(/\$\{/g, "$ {");
+  const text = String(s)
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\$\{/g, "$ {");
   const q = ['"', "'", "`"].find((c) => !text.includes(c));
   return q ? `${q}${text}${q}` : `"${text.replace(/"/g, "'")}"`;
 }
@@ -120,7 +133,7 @@ export function nsisScript({ m, version, pkg = {}, src, icon, out, signCmd }) {
     "  ${GetParameters} $R0",
     "  ClearErrors",
     '  ${GetOptions} $R0 "--relaunch" $R1',
-    '  ${IfNot} ${Errors}',
+    "  ${IfNot} ${Errors}",
     '    StrCpy $Relaunch "1"',
     "  ${EndIf}",
     "FunctionEnd",
@@ -157,9 +170,9 @@ export function nsisScript({ m, version, pkg = {}, src, icon, out, signCmd }) {
     "    Pop $1",
     // Stays "not run" if the download failed and there's nothing to run.
     '    StrCpy $1 "not run"',
-    '    ExecWait \'"$TEMP\\MicrosoftEdgeWebview2Setup.exe" /silent /install\' $1',
+    "    ExecWait '\"$TEMP\\MicrosoftEdgeWebview2Setup.exe\" /silent /install' $1",
     '    Delete "$TEMP\\MicrosoftEdgeWebview2Setup.exe"',
-    '    ${If} $1 != 0',
+    "    ${If} $1 != 0",
     '      MessageBox MB_ICONEXCLAMATION|MB_OK "The WebView2 runtime could not be installed (code $1). Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and run this setup again." /SD IDOK',
     "      Abort",
     "    ${EndIf}",
@@ -229,7 +242,10 @@ export function findSigntool(env = process.env) {
   } catch {}
   const kits = path.join(env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)", "Windows Kits", "10", "bin");
   if (!fs.existsSync(kits)) return null;
-  const versions = fs.readdirSync(kits).filter((d) => /^10\./.test(d)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const versions = fs
+    .readdirSync(kits)
+    .filter((d) => /^10\./.test(d))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   for (const v of versions.reverse()) {
     const p = path.join(kits, v, "x64", "signtool.exe");
     if (fs.existsSync(p)) return p;
@@ -251,8 +267,17 @@ export function signingPlan(env = process.env) {
 
 /** signtool's arguments to sign `file` under `plan` (the file last). */
 export const signArgs = (plan, file) => [
-  "sign", "/fd", "SHA256", "/f", plan.pfx, ...(plan.password ? ["/p", plan.password] : []),
-  "/tr", plan.timestamp, "/td", "SHA256", file,
+  "sign",
+  "/fd",
+  "SHA256",
+  "/f",
+  plan.pfx,
+  ...(plan.password ? ["/p", plan.password] : []),
+  "/tr",
+  plan.timestamp,
+  "/td",
+  "SHA256",
+  file,
 ];
 
 /**
@@ -260,9 +285,17 @@ export const signArgs = (plan, file) => [
  * with "%1" for the file.
  */
 export function signCommand(signtool, plan) {
-  for (const [what, v] of [["KESTREL_WIN_SIGN_PASSWORD", plan.password], ["KESTREL_WIN_SIGN_PFX", plan.pfx], ["signtool's path", signtool]])
-    if (/[`"]|\$\{/.test(v)) throw new Error(`${what} can't contain ", \` or \${ (makensis runs the signing command for the uninstaller)`);
-  return signArgs(plan, "%1").reduce((cmd, a) => `${cmd} ${/[\s%]/.test(a) || a === "" ? `"${a}"` : a}`, `"${signtool}"`);
+  for (const [what, v] of [
+    ["KESTREL_WIN_SIGN_PASSWORD", plan.password],
+    ["KESTREL_WIN_SIGN_PFX", plan.pfx],
+    ["signtool's path", signtool],
+  ])
+    if (/[`"]|\$\{/.test(v))
+      throw new Error(`${what} can't contain ", \` or \${ (makensis runs the signing command for the uninstaller)`);
+  return signArgs(plan, "%1").reduce(
+    (cmd, a) => `${cmd} ${/[\s%]/.test(a) || a === "" ? `"${a}"` : a}`,
+    `"${signtool}"`,
+  );
 }
 
 /** Sign `file` in place. */
@@ -278,7 +311,9 @@ export function makeInstaller({ makensis, script, out }) {
   const nsi = `${out}.nsi`;
   fs.writeFileSync(nsi, script);
   try {
-    return execFileSync(makensis, ["-V2", "-INPUTCHARSET", "UTF8", nsi], { stdio: ["ignore", "pipe", "pipe"] }).toString();
+    return execFileSync(makensis, ["-V2", "-INPUTCHARSET", "UTF8", nsi], {
+      stdio: ["ignore", "pipe", "pipe"],
+    }).toString();
   } finally {
     fs.rmSync(nsi, { force: true });
   }

@@ -7,8 +7,20 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
 import {
-  appDir, appImage, appImageArchOf, appImageNameOf, appImageRuntime,
-  ar, controlFile, debArchOf, debNameOf, debPackage, debVersionOf, desktopEntry, maintainerOf, tar,
+  appDir,
+  appImage,
+  appImageArchOf,
+  appImageNameOf,
+  appImageRuntime,
+  ar,
+  controlFile,
+  debArchOf,
+  debNameOf,
+  debPackage,
+  debVersionOf,
+  desktopEntry,
+  maintainerOf,
+  tar,
 } from "../src/linux.js";
 
 // ---- readers, written from the formats rather than from linux.js ----
@@ -32,7 +44,11 @@ function readTar(buf) {
   for (let off = 0; off + 512 <= buf.length; ) {
     const h = buf.subarray(off, off + 512);
     if (h.every((b) => b === 0)) break;
-    const str = (a, n) => h.subarray(a, a + n).toString().replace(/\0.*$/s, "");
+    const str = (a, n) =>
+      h
+        .subarray(a, a + n)
+        .toString()
+        .replace(/\0.*$/s, "");
     let sum = 0;
     for (let i = 0; i < 512; i++) sum += i >= 148 && i < 156 ? 32 : h[i];
     assert.equal(parseInt(str(148, 8), 8), sum, "tar checksum");
@@ -80,12 +96,25 @@ test("Debian names, versions and architectures", () => {
 });
 
 test("control file and desktop entry", () => {
-  const c = controlFile(m, { name: "my-app", version: "1.0", arch: "amd64", maintainer: "A <a@b>", description: "Notes\nfor you", installedKiB: 12 });
+  const c = controlFile(m, {
+    name: "my-app",
+    version: "1.0",
+    arch: "amd64",
+    maintainer: "A <a@b>",
+    description: "Notes\nfor you",
+    installedKiB: 12,
+  });
   assert.match(c, /^Package: my-app\nVersion: 1\.0\nArchitecture: amd64\n/);
   assert.match(c, /\nDepends: libwebkit2gtk-4\.1-0, libgtk-3-0\n/);
   assert.match(c, /\nRecommends: libayatana-appindicator3-1\n/, "tray apps recommend the indicator library");
   assert.match(c, /\nDescription: Notes for you\n$/, "one line");
-  assert.doesNotMatch(controlFile({ ...m, permissions: [] }, { name: "a", version: "1", arch: "amd64", maintainer: "x", installedKiB: 1 }), /Recommends/);
+  assert.doesNotMatch(
+    controlFile(
+      { ...m, permissions: [] },
+      { name: "a", version: "1", arch: "amd64", maintainer: "x", installedKiB: 1 },
+    ),
+    /Recommends/,
+  );
   const d = desktopEntry({ title: "My\nApp" }, { name: "my-app" });
   assert.match(d, /^\[Desktop Entry\]\nType=Application\nName=My App\nExec=\/usr\/bin\/my-app\nIcon=my-app\n/);
 });
@@ -104,23 +133,43 @@ test("tar: files, folders, links, long names through pax", () => {
       1700000000,
     ),
   );
-  assert.deepEqual(entries.map((e) => [e.path, e.type, e.mode.toString(8)]), [
-    ["./a/", "5", "755"],
-    ["./a/run", "0", "755"],
-    ["./a/link", "2", "777"],
-    [long, "0", "644"],
-    ["./b", "2", "777"],
-  ]);
+  assert.deepEqual(
+    entries.map((e) => [e.path, e.type, e.mode.toString(8)]),
+    [
+      ["./a/", "5", "755"],
+      ["./a/run", "0", "755"],
+      ["./a/link", "2", "777"],
+      [long, "0", "644"],
+      ["./b", "2", "777"],
+    ],
+  );
   assert.equal(entries[1].data.toString(), "#!/bin/sh\n");
   assert.equal(entries[2].target, "/opt/x/run");
   assert.equal(entries[3].data.length, 1000);
   assert.equal(entries[4].target.length, 151);
-  assert.ok(entries.every((e) => e.uid === 0), "owned by root");
+  assert.ok(
+    entries.every((e) => e.uid === 0),
+    "owned by root",
+  );
 });
 
 test("ar pads odd members", () => {
-  const members = readAr(ar([["a", Buffer.from("abc")], ["b", Buffer.from("de")]], 0));
-  assert.deepEqual(members.map(([n, d]) => [n, d.toString()]), [["a", "abc"], ["b", "de"]]);
+  const members = readAr(
+    ar(
+      [
+        ["a", Buffer.from("abc")],
+        ["b", Buffer.from("de")],
+      ],
+      0,
+    ),
+  );
+  assert.deepEqual(
+    members.map(([n, d]) => [n, d.toString()]),
+    [
+      ["a", "abc"],
+      ["b", "de"],
+    ],
+  );
 });
 
 test("debPackage lays out /opt, /usr/bin, the desktop entry and icons", () => {
@@ -131,13 +180,24 @@ test("debPackage lays out /opt, /usr/bin, the desktop entry and icons", () => {
   fs.writeFileSync(path.join(dir, "app", "index.html"), "<!doctype html>");
   fs.writeFileSync(path.join(dir, "app", "assets", "index-abc.js"), "x");
   const icons = { 16: Buffer.from("p16"), 512: Buffer.from("p512"), 1024: Buffer.from("p1024") };
-  const { file, version, deb } = debPackage({ m, dir, version: "1.0.0-rc.1", arch: "amd64", icons, pkg: { description: "Notes" }, mtime: 1 });
+  const { file, version, deb } = debPackage({
+    m,
+    dir,
+    version: "1.0.0-rc.1",
+    arch: "amd64",
+    icons,
+    pkg: { description: "Notes" },
+    mtime: 1,
+  });
   fs.rmSync(dir, { recursive: true });
   assert.equal(file, "my-app_1.0.0~rc.1_amd64.deb");
   assert.equal(version, "1.0.0~rc.1");
 
   const members = readAr(deb);
-  assert.deepEqual(members.map(([n]) => n), ["debian-binary", "control.tar.gz", "data.tar.gz"]);
+  assert.deepEqual(
+    members.map(([n]) => n),
+    ["debian-binary", "control.tar.gz", "data.tar.gz"],
+  );
   assert.equal(members[0][1].toString(), "2.0\n");
   const data = readTar(zlib.gunzipSync(members[2][1]));
   const byPath = Object.fromEntries(data.map((e) => [e.path, e]));
@@ -200,8 +260,11 @@ test("the AppImage runtime is verified, cached, and overridable", async () => {
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-rt-"));
   const good = Buffer.from("\x7fELF runtime");
   const pins = { x86_64: crypto.createHash("sha256").update(good).digest("hex") };
-  let fetched = [];
-  const fetchImpl = async (url) => (fetched.push(url), { ok: true, arrayBuffer: async () => good });
+  const fetched = [];
+  const fetchImpl = async (url) => {
+    fetched.push(url);
+    return { ok: true, arrayBuffer: async () => good };
+  };
   const opts = { env: {}, cacheDir, fetchImpl, pins };
 
   assert.deepEqual(await appImageRuntime("x86_64", opts), good);
@@ -212,21 +275,33 @@ test("the AppImage runtime is verified, cached, and overridable", async () => {
   fs.writeFileSync(fs.readdirSync(cacheDir).map((f) => path.join(cacheDir, f))[0], "tampered");
   await assert.rejects(appImageRuntime("x86_64", opts), /doesn't match the pinned SHA-256/);
 
-  const bad = { ...opts, cacheDir: path.join(cacheDir, "fresh"), fetchImpl: async () => ({ ok: true, arrayBuffer: async () => Buffer.from("evil") }) };
+  const bad = {
+    ...opts,
+    cacheDir: path.join(cacheDir, "fresh"),
+    fetchImpl: async () => ({ ok: true, arrayBuffer: async () => Buffer.from("evil") }),
+  };
   await assert.rejects(appImageRuntime("x86_64", bad), /doesn't match/);
   assert.equal(fs.existsSync(bad.cacheDir), false, "a bad download is never cached");
-  await assert.rejects(appImageRuntime("x86_64", { ...bad, fetchImpl: async () => ({ ok: false, status: 404 }) }), /HTTP 404/);
+  await assert.rejects(
+    appImageRuntime("x86_64", { ...bad, fetchImpl: async () => ({ ok: false, status: 404 }) }),
+    /HTTP 404/,
+  );
 
   const local = path.join(cacheDir, "runtime");
   fs.writeFileSync(local, good);
-  assert.deepEqual(await appImageRuntime("x86_64", { ...opts, env: { KESTREL_APPIMAGE_RUNTIME: local }, fetchImpl: null }), good);
+  assert.deepEqual(
+    await appImageRuntime("x86_64", { ...opts, env: { KESTREL_APPIMAGE_RUNTIME: local }, fetchImpl: null }),
+    good,
+  );
   await assert.rejects(appImageRuntime("riscv64", opts), /no AppImage runtime/);
   fs.rmSync(cacheDir, { recursive: true });
 });
 
 // Linux-only, and it makes symlinks, which Windows rewrites with backslashes
 // (and allows only with Developer Mode or admin).
-test("appDir lays out AppRun, the desktop entry and icons", { skip: process.platform === "win32" && "symlinks on Windows" }, () => {
+test("appDir lays out AppRun, the desktop entry and icons", {
+  skip: process.platform === "win32" && "symlinks on Windows",
+}, () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-appdir-"));
   const dir = path.join(tmp, "portable");
   fs.mkdirSync(path.join(dir, "app"), { recursive: true });

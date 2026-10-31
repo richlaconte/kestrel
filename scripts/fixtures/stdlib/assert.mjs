@@ -10,7 +10,10 @@ assert.equal(r.version, "1.2.3");
 assert.equal(r.runsBefore ?? null, Number(run) > 1 ? Number(run) - 1 : null, "store survives a restart");
 assert.deepEqual(r.prefs, { theme: "dark", sizes: [1, 2] });
 assert.equal(r.deleteMissing, false);
-assert.deepEqual(r.keys.filter((k) => k !== "result"), ["prefs", "runs"]);
+assert.deepEqual(
+  r.keys.filter((k) => k !== "result"),
+  ["prefs", "runs"],
+);
 assert.equal(r.setTitle, null);
 assert.deepEqual(r.badDialog, { error: "io", kestrelError: true }, "dialog options are validated");
 assert.equal(r.open, "second");
@@ -44,9 +47,24 @@ if (mode === "granted") {
   }
   assert.equal(r.trayDestroyAgain, false);
 } else {
-  for (const k of ["write", "readText", "readBytes", "exists", "missing", "escape", "storeFile",
-                   "clipWrite", "clipRead", "openFile", "openJunk", "notify",
-                   "trayBad", "trayCreate", "trayDestroy", "trayDestroyAgain"])
+  for (const k of [
+    "write",
+    "readText",
+    "readBytes",
+    "exists",
+    "missing",
+    "escape",
+    "storeFile",
+    "clipWrite",
+    "clipRead",
+    "openFile",
+    "openJunk",
+    "notify",
+    "trayBad",
+    "trayCreate",
+    "trayDestroy",
+    "trayDestroyAgain",
+  ])
     assert.deepEqual(r[k], denied, `${k} without an fs grant`);
 }
 console.log(`OK (${mode}, run ${run}): ${JSON.stringify(r)}`);

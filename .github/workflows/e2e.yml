@@ -28,6 +28,9 @@ jobs:
             choco install nsis -y --no-progress
           fi
       - run: npm install
+      # Biome: lint and format check for the JS/TS (#32). One OS is enough.
+      - if: runner.os == 'Linux'
+        run: npm run lint
       - run: npm test
 
   smoke:

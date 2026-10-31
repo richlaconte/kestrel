@@ -89,8 +89,16 @@ export function notarize(app, env = process.env) {
   const zip = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kestrel-notary-")), "app.zip");
   run("ditto", ["-c", "-k", "--keepParent", app, zip]);
   const out = run("xcrun", [
-    "notarytool", "submit", zip, "--wait",
-    "--apple-id", env.APPLE_ID, "--password", env.APPLE_PASSWORD, "--team-id", env.APPLE_TEAM_ID,
+    "notarytool",
+    "submit",
+    zip,
+    "--wait",
+    "--apple-id",
+    env.APPLE_ID,
+    "--password",
+    env.APPLE_PASSWORD,
+    "--team-id",
+    env.APPLE_TEAM_ID,
   ]);
   fs.rmSync(path.dirname(zip), { recursive: true, force: true });
   if (!/status:\s*Accepted/i.test(out))

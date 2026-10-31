@@ -9,6 +9,11 @@
   ],
   "scripts": {
     "build:host": "cd host && cargo build --release",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15"
   }
 }

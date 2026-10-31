@@ -7,12 +7,12 @@ const m = { appId: "quick-note", title: "Quick <Note> & Co" };
 
 test("Info.plist names the executable, icon, bundle id and version, escaped", () => {
   const p = infoPlist(m, "1.2.3");
-  assert.match(p, /<key>CFBundleExecutable<\/key>\n  <string>quick-note<\/string>/);
-  assert.match(p, /<key>CFBundleIdentifier<\/key>\n  <string>dev\.kestrel\.app\.quick-note<\/string>/);
-  assert.match(p, /<key>CFBundleShortVersionString<\/key>\n  <string>1\.2\.3<\/string>/);
-  assert.match(p, /<key>CFBundleIconFile<\/key>\n  <string>icon\.icns<\/string>/);
+  assert.match(p, /<key>CFBundleExecutable<\/key>\n {2}<string>quick-note<\/string>/);
+  assert.match(p, /<key>CFBundleIdentifier<\/key>\n {2}<string>dev\.kestrel\.app\.quick-note<\/string>/);
+  assert.match(p, /<key>CFBundleShortVersionString<\/key>\n {2}<string>1\.2\.3<\/string>/);
+  assert.match(p, /<key>CFBundleIconFile<\/key>\n {2}<string>icon\.icns<\/string>/);
   assert.match(p, /<string>Quick &lt;Note&gt; &amp; Co<\/string>/);
-  assert.match(p, /<key>NSHighResolutionCapable<\/key>\n  <true\/>/);
+  assert.match(p, /<key>NSHighResolutionCapable<\/key>\n {2}<true\/>/);
   assert.equal(bundleIdOf({ ...m, bundleId: "com.example.qn" }), "com.example.qn");
 });
 

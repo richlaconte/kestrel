@@ -171,10 +171,15 @@ npm run build:host          # needs Rust locally, once
 node packages/kestrel/bin/kestrel.js create demo
 node packages/kestrel/bin/kestrel.js dev demo
 
-npm test                                # CLI + typegen unit tests
+npm test                                # CLI, typegen and kestrel-native unit tests
+npm run lint                            # Biome lint + format check (CI runs it)
+npm run format                          # apply Biome's formatting
 (cd host && cargo test --release)       # host tests
+(cd host && cargo fmt --check && cargo clippy --all-targets -- -D warnings)
 bash scripts/e2e-ipc.sh                 # end-to-end (needs a display; xvfb-run on Linux)
 ```
+
+CI runs every `scripts/e2e-*.sh` on Linux, macOS and Windows.
 
 ## License
 

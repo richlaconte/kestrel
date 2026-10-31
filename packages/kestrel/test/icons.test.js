@@ -10,7 +10,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT = fs.readFileSync(path.join(ROOT, "assets", "icon.png"));
 
 /** A solid square, or a half-transparent one. */
-const square = (size, rgba) => ({ width: size, height: size, data: new Uint8Array(size * size * 4).map((_, i) => rgba[i % 4]) });
+const square = (size, rgba) => ({
+  width: size,
+  height: size,
+  data: new Uint8Array(size * size * 4).map((_, i) => rgba[i % 4]),
+});
 
 test("PNG encode/decode round trips exactly", () => {
   const img = { width: 3, height: 2, data: Uint8Array.from({ length: 24 }, (_, i) => (i * 37) & 0xff) };
@@ -40,7 +44,16 @@ test("decodes RGB and palette PNGs, refuses 16-bit and interlaced ones", () => {
     ]);
   };
   assert.deepEqual([...decodePng(png(2, 8, 0, [10, 20, 30])).data], [10, 20, 30, 255]);
-  const pal = png(3, 8, 0, [1], [["PLTE", [0, 0, 0, 9, 8, 7]], ["tRNS", [255, 128]]]);
+  const pal = png(
+    3,
+    8,
+    0,
+    [1],
+    [
+      ["PLTE", [0, 0, 0, 9, 8, 7]],
+      ["tRNS", [255, 128]],
+    ],
+  );
   assert.deepEqual([...decodePng(pal).data], [9, 8, 7, 128]);
   assert.throws(() => decodePng(png(6, 16, 0, [])), /16-bit PNGs aren't supported/);
   assert.throws(() => decodePng(png(6, 8, 1, [1, 2, 3, 4])), /interlaced/);
@@ -65,7 +78,10 @@ test("makeIcons: every size, valid containers, and clear errors", () => {
   assert.equal(r.ico[6 + 16 * 6], 0, "256 px is stored as 0");
   assert.deepEqual(r.warnings, []);
 
-  assert.throws(() => makeIcons(encodePng({ width: 600, height: 500, data: new Uint8Array(600 * 500 * 4) })), /must be square \(got 600×500\)/);
+  assert.throws(
+    () => makeIcons(encodePng({ width: 600, height: 500, data: new Uint8Array(600 * 500 * 4) })),
+    /must be square \(got 600×500\)/,
+  );
   assert.throws(() => makeIcons(encodePng(square(256, [1, 2, 3, 255]))), /at least 512×512/);
   const small = makeIcons(encodePng(square(512, [1, 2, 3, 255])));
   assert.ok(!small.png[1024], "no upscaled 1024");

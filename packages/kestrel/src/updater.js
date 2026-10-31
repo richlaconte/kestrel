@@ -71,7 +71,15 @@ export function mergeFeeds(feeds) {
   if (!feeds.length) throw new Error("nothing to merge");
   const versions = [...new Set(feeds.map((f) => f.version))];
   if (versions.length > 1) throw new Error(`the feeds are for different versions: ${versions.join(", ")}`);
-  const out = { version: versions[0], pubDate: feeds.map((f) => f.pubDate).filter(Boolean).sort().at(-1), platforms: {} };
+  const out = {
+    version: versions[0],
+    pubDate: feeds
+      .map((f) => f.pubDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1),
+    platforms: {},
+  };
   const notes = feeds.find((f) => f.notes)?.notes;
   if (notes) out.notes = notes;
   for (const f of feeds)
@@ -95,7 +103,11 @@ export function validateUpdater(u) {
   const local = url && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (!url || !(url.protocol === "https:" || (url.protocol === "http:" && local)))
     errs.push(`\`updater.endpoint\` must be an https URL (http only to localhost), got ${JSON.stringify(u.endpoint)}`);
-  if (typeof u.pubkey !== "string" || Buffer.from(u.pubkey, "base64").length !== 32 || !/^[A-Za-z0-9+/]{43}=$/.test(u.pubkey))
+  if (
+    typeof u.pubkey !== "string" ||
+    Buffer.from(u.pubkey, "base64").length !== 32 ||
+    !/^[A-Za-z0-9+/]{43}=$/.test(u.pubkey)
+  )
     errs.push("`updater.pubkey` must be a base64 Ed25519 public key (from `kestrel updater keygen`)");
   for (const k of Object.keys(u))
     if (k !== "endpoint" && k !== "pubkey") errs.push(`\`updater.${k}\` is not a known field`);

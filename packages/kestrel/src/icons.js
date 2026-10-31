@@ -65,7 +65,10 @@ export function decodePng(buf) {
   const rgba = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
     const s = px.subarray(i * channels, (i + 1) * channels);
-    let r, g, b, a = 255;
+    let r,
+      g,
+      b,
+      a = 255;
     if (colorType === 0) [r, g, b] = [s[0], s[0], s[0]];
     else if (colorType === 4) [r, g, b, a] = [s[0], s[0], s[0], s[1]];
     else if (colorType === 2) [r, g, b] = s;
@@ -138,10 +141,16 @@ export function resize(img, size) {
   const scale = img.width / size;
   const out = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) {
-    const y0 = y * scale, y1 = y0 + scale;
+    const y0 = y * scale,
+      y1 = y0 + scale;
     for (let x = 0; x < size; x++) {
-      const x0 = x * scale, x1 = x0 + scale;
-      let r = 0, g = 0, b = 0, a = 0, area = 0;
+      const x0 = x * scale,
+        x1 = x0 + scale;
+      let r = 0,
+        g = 0,
+        b = 0,
+        a = 0,
+        area = 0;
       for (let sy = Math.floor(y0); sy < Math.ceil(y1); sy++) {
         const wy = Math.min(sy + 1, y1) - Math.max(sy, y0);
         for (let sx = Math.floor(x0); sx < Math.ceil(x1); sx++) {
@@ -166,8 +175,17 @@ export function resize(img, size) {
 // .icns entry types holding PNGs, by pixel size. Retina variants (ic11–ic14)
 // are the same pixels as the next size up.
 const ICNS_TYPES = [
-  ["icp4", 16], ["ic11", 32], ["icp5", 32], ["icp6", 48], ["ic12", 64],
-  ["ic07", 128], ["ic13", 256], ["ic08", 256], ["ic14", 512], ["ic09", 512], ["ic10", 1024],
+  ["icp4", 16],
+  ["ic11", 32],
+  ["icp5", 32],
+  ["icp6", 48],
+  ["ic12", 64],
+  ["ic07", 128],
+  ["ic13", 256],
+  ["ic08", 256],
+  ["ic14", 512],
+  ["ic09", 512],
+  ["ic10", 1024],
 ];
 export const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
@@ -212,10 +230,11 @@ export function ico(pngs) {
  */
 export function makeIcons(source) {
   const img = decodePng(source);
-  if (img.width !== img.height)
-    throw new IconError(`the icon must be square (got ${img.width}×${img.height})`);
-  if (img.width < 512) throw new IconError(`the icon must be at least 512×512 (got ${img.width}×${img.height}); 1024×1024 is best`);
-  const warnings = img.width < 1024 ? [`the icon is ${img.width}×${img.width}; 1024×1024 looks sharp on Retina displays`] : [];
+  if (img.width !== img.height) throw new IconError(`the icon must be square (got ${img.width}×${img.height})`);
+  if (img.width < 512)
+    throw new IconError(`the icon must be at least 512×512 (got ${img.width}×${img.height}); 1024×1024 is best`);
+  const warnings =
+    img.width < 1024 ? [`the icon is ${img.width}×${img.width}; 1024×1024 looks sharp on Retina displays`] : [];
   const sizes = [...new Set([...ICNS_TYPES.map(([, s]) => s), ...ICO_SIZES])].filter((s) => s <= img.width);
   // Each size straight from the source: the area average is exact at any ratio.
   const png = Object.fromEntries(sizes.map((s) => [s, encodePng(resize(img, s))]));
