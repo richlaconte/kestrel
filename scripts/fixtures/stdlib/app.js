@@ -56,7 +56,14 @@ await store.delete("fromSecond");
 // #29: a bad menu is refused before any icon exists. With closeToTray,
 // closing the main window hides it, so this page keeps running. Linux
 // without libayatana-appindicator3 refuses with unsupported_platform.
-await step("trayBad", () => tray.create({ menu: [{ id: "a", label: "A" }, { id: "a", label: "B" }] }));
+await step("trayBad", () =>
+  tray.create({
+    menu: [
+      { id: "a", label: "A" },
+      { id: "a", label: "B" },
+    ],
+  }),
+);
 await step("trayCreate", () =>
   tray.create({
     tooltip: "e2e",

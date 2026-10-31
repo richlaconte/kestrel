@@ -13,6 +13,7 @@ import { errorFile, watchNative } from "../src/watch.js";
 import { IconError, makeIcons } from "../src/icons.js";
 import * as linux from "../src/linux.js";
 import * as macos from "../src/macos.js";
+import * as pe from "../src/pe.js";
 import * as updater from "../src/updater.js";
 import * as win from "../src/windows.js";
 
@@ -43,8 +44,7 @@ function iconOf(dir, m) {
 
 function readManifest(dir) {
   const p = path.join(dir, "kestrel.json");
-  if (!fs.existsSync(p))
-    die(`no kestrel.json in ${dir} — is this a kestrel app? (try: kestrel create my-app)`);
+  if (!fs.existsSync(p)) die(`no kestrel.json in ${dir} — is this a kestrel app? (try: kestrel create my-app)`);
   let m;
   try {
     m = JSON.parse(fs.readFileSync(p, "utf8"));
@@ -115,8 +115,7 @@ function spawnVite(dir, viteArgs, opts) {
 function killTree(child) {
   if (!child || child.exitCode !== null) return;
   try {
-    if (process.platform === "win32")
-      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    if (process.platform === "win32") spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     else child.kill("SIGTERM");
   } catch {}
 }
@@ -137,10 +136,9 @@ function create(name) {
   const template = flag("template") ?? "react";
   const dirName = template === "react" ? "react" : "default";
   // Bundled with the npm package; the repo root works for monorepo development.
-  const tplDir = [
-    path.join(PKG_ROOT, "templates", dirName),
-    path.join(REPO_ROOT, "templates", dirName),
-  ].find((p) => fs.existsSync(p));
+  const tplDir = [path.join(PKG_ROOT, "templates", dirName), path.join(REPO_ROOT, "templates", dirName)].find((p) =>
+    fs.existsSync(p),
+  );
   if (!tplDir) die(`unknown template: ${template}`);
   const dest = path.resolve(name);
   if (fs.existsSync(dest)) die(`${name} already exists`);
@@ -173,7 +171,9 @@ function typegen(dir = ".", { quiet } = {}) {
     throw e;
   }
   for (const n of res.skipped)
-    console.warn(`\x1b[33mkestrel:\x1b[0m native.ts exports \`${n}\`, which isn't a function — it won't be callable from the webview`);
+    console.warn(
+      `\x1b[33mkestrel:\x1b[0m native.ts exports \`${n}\`, which isn't a function — it won't be callable from the webview`,
+    );
   if (!quiet) {
     if (!m.native) info("app declares no native module — nothing to generate");
     else info(`generated typed stubs — ${res.names.length} fn(s): ${res.names.join(", ")}`);
@@ -298,9 +298,7 @@ function viteBuild(dir) {
   return new Promise((resolve, reject) => {
     const c = spawnVite(dir, ["build"], { stdio: ["ignore", "inherit", "inherit"] });
     c.on("error", reject);
-    c.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`vite build exited ${code}`)),
-    );
+    c.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`vite build exited ${code}`))));
   });
 }
 
@@ -327,8 +325,7 @@ async function build(dir = ".") {
   } else {
     assets = path.resolve(dir, m.frontend ?? ".");
   }
-  if (!fs.existsSync(path.join(assets, "index.html")))
-    die(`no index.html in ${assets} — frontend build failed?`);
+  if (!fs.existsSync(path.join(assets, "index.html"))) die(`no index.html in ${assets} — frontend build failed?`);
 
   // 2. Icons: every size, for the bundle and for installers.
   const iconSrc = iconOf(dir, m);
@@ -339,7 +336,7 @@ async function build(dir = ".") {
     if (!(e instanceof IconError)) throw e;
     die(`icon ${path.relative(dir, iconSrc)}: ${e.message}`);
   }
-  icons.warnings.forEach((w) => warn(w));
+  for (const w of icons.warnings) warn(w);
   const iconsDir = path.join(dir, "build", "icons");
   fs.rmSync(iconsDir, { recursive: true, force: true });
   fs.mkdirSync(iconsDir, { recursive: true });
@@ -350,9 +347,7 @@ async function build(dir = ".") {
   // 3. Assemble: a .app on macOS, a portable folder elsewhere.
   const mac = process.platform === "darwin";
   const version = appVersion(dir, m);
-  const out = mac
-    ? path.join(dir, "build", `${macos.appNameOf(m)}.app`)
-    : path.join(dir, "build", m.appId);
+  const out = mac ? path.join(dir, "build", `${macos.appNameOf(m)}.app`) : path.join(dir, "build", m.appId);
   const layout = mac
     ? macos.appLayout(out, m)
     : { exe: path.join(out, m.appId + (process.platform === "win32" ? ".exe" : "")), resources: out };
@@ -362,6 +357,7 @@ async function build(dir = ".") {
 
   fs.copyFileSync(host, layout.exe);
   fs.chmodSync(layout.exe, 0o755);
+  if (process.platform === "win32") setExeResources(layout.exe, m, version, icons.ico, readPackageJson(dir));
   // A frontend of "." holds the build output, dependencies and dotfiles
   // too. Entry by entry: cpSync refuses to copy a folder into itself.
   const skip = new Set([path.join(dir, "build"), path.join(dir, "node_modules")]);
@@ -427,12 +423,17 @@ async function build(dir = ".") {
   }
   const linuxOut = process.platform === "linux" && ["--deb", "--appimage"].some((f) => args.includes(f));
   if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
-  const appImage = process.platform === "linux" && args.includes("--appimage") ? await makeAppImage(dir, m, out, version, icons) : null;
+  const appImage =
+    process.platform === "linux" && args.includes("--appimage")
+      ? await makeAppImage(dir, m, out, version, icons)
+      : null;
   let setup;
   if (winSigning) {
-    if (args.includes("--installer")) setup = makeWinInstaller(dir, m, out, version, winSigning.signtool, winSigning.plan);
+    if (args.includes("--installer"))
+      setup = makeWinInstaller(dir, m, out, version, winSigning.signtool, winSigning.plan);
     else console.log("  note: portable build. Add --installer for a setup.exe.");
-  } else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
+  } else if (!mac && !linuxOut)
+    console.log("  note: portable build. Add --deb or --appimage for an installable package.");
 
   signUpdate(dir, m, version, { app: mac ? out : null, appImage, setup });
 }
@@ -480,7 +481,9 @@ function signUpdate(dir, m, version, { app, appImage, setup }) {
     }
   } else artifact = appImage ?? setup;
   if (!artifact) {
-    warn(`updater: nothing to update from on ${process.platform}: build with ${process.platform === "win32" ? "--installer" : "--appimage"}`);
+    warn(
+      `updater: nothing to update from on ${process.platform}: build with ${process.platform === "win32" ? "--installer" : "--appimage"}`,
+    );
     return;
   }
   const notes = flag("notes");
@@ -493,7 +496,9 @@ function signUpdate(dir, m, version, { app, appImage, setup }) {
   });
   const feedPath = path.join(dir, "build", "latest.json");
   fs.writeFileSync(feedPath, JSON.stringify(f, null, 2) + "\n");
-  info(`updater: signed ${path.basename(artifact)}; feed in ${path.relative(process.cwd(), feedPath)} (upload both next to ${m.updater.endpoint})`);
+  info(
+    `updater: signed ${path.basename(artifact)}; feed in ${path.relative(process.cwd(), feedPath)} (upload both next to ${m.updater.endpoint})`,
+  );
 }
 
 /** kestrel updater keygen [file] | merge <latest.json…> [--out=file] */
@@ -503,8 +508,12 @@ function updaterCmd(sub, rest) {
     if (fs.existsSync(file)) die(`${path.relative(process.cwd(), file)} already exists; not overwriting a signing key`);
     const { privateKey, publicKey } = updater.keygen();
     fs.writeFileSync(file, privateKey + "\n", { mode: 0o600 });
-    info(`wrote the private key to ${path.relative(process.cwd(), file)}. Keep it secret and out of git; lose it and installed apps can't be updated.`);
-    console.log(`\nAdd to kestrel.json:\n\n  "updater": {\n    "endpoint": "https://example.com/my-app/latest.json",\n    "pubkey": "${publicKey}"\n  }\n\nThen build with KESTREL_UPDATER_KEY=${path.relative(process.cwd(), file)} to sign updates.`);
+    info(
+      `wrote the private key to ${path.relative(process.cwd(), file)}. Keep it secret and out of git; lose it and installed apps can't be updated.`,
+    );
+    console.log(
+      `\nAdd to kestrel.json:\n\n  "updater": {\n    "endpoint": "https://example.com/my-app/latest.json",\n    "pubkey": "${publicKey}"\n  }\n\nThen build with KESTREL_UPDATER_KEY=${path.relative(process.cwd(), file)} to sign updates.`,
+    );
     return;
   }
   if (sub === "merge") {
@@ -543,7 +552,9 @@ function makeDeb(dir, m, out, version, icons) {
   const { file, deb } = linux.debPackage({ m, dir: out, version, arch, icons: icons.png, pkg });
   const dest = path.join(dir, "build", file);
   fs.writeFileSync(dest, deb);
-  info(`built ${path.relative(process.cwd(), dest)} — ${(deb.length / 1024 / 1024).toFixed(1)} MB; installs to /opt/${linux.debNameOf(m)}`);
+  info(
+    `built ${path.relative(process.cwd(), dest)} — ${(deb.length / 1024 / 1024).toFixed(1)} MB; installs to /opt/${linux.debNameOf(m)}`,
+  );
 }
 
 /** build/<Title>-<version>-<arch>.AppImage from the portable folder. */
@@ -565,18 +576,49 @@ async function makeAppImage(dir, m, out, version, icons) {
   return dest;
 }
 
+/**
+ * Give the app's .exe its own icon and version info, so Explorer, file
+ * properties and the taskbar show the app rather than Kestrel (#25).
+ */
+function setExeResources(exe, m, version, ico, pkg) {
+  const publisher = win.publisherOf(pkg, m);
+  try {
+    const patched = pe.setResources(fs.readFileSync(exe), {
+      ico,
+      version,
+      strings: {
+        CompanyName: publisher,
+        FileDescription: m.title,
+        FileVersion: version,
+        InternalName: m.appId,
+        LegalCopyright: publisher,
+        OriginalFilename: `${m.appId}.exe`,
+        ProductName: m.title,
+        ProductVersion: version,
+      },
+    });
+    fs.writeFileSync(exe, patched);
+  } catch (e) {
+    if (!(e instanceof pe.PeError)) throw e;
+    warn(`the .exe keeps Kestrel's icon and version info: ${e.message}`);
+  }
+}
+
 function winSign(signtool, plan, file) {
   try {
     win.sign(signtool, plan, file);
   } catch (e) {
-    die(`signing ${path.basename(file)} failed: ${e.stderr?.toString().trim() || e.stdout?.toString().trim() || e.message}`);
+    die(
+      `signing ${path.basename(file)} failed: ${e.stderr?.toString().trim() || e.stdout?.toString().trim() || e.message}`,
+    );
   }
 }
 
 /** build/<Title>-<version>-<arch>-setup.exe from the portable folder. */
 function makeWinInstaller(dir, m, out, version, signtool, plan) {
   const makensis = win.findMakensis();
-  if (!makensis) die("--installer needs NSIS: install it from https://nsis.sourceforge.io (or `winget install NSIS.NSIS`)");
+  if (!makensis)
+    die("--installer needs NSIS: install it from https://nsis.sourceforge.io (or `winget install NSIS.NSIS`)");
   const dest = path.join(dir, "build", win.installerNameOf(m, version));
   let signCmd;
   try {
@@ -584,7 +626,15 @@ function makeWinInstaller(dir, m, out, version, signtool, plan) {
   } catch (e) {
     die(e.message);
   }
-  const script = win.nsisScript({ m, version, pkg: readPackageJson(dir), src: out, icon: path.join(out, "icon.ico"), out: dest, signCmd });
+  const script = win.nsisScript({
+    m,
+    version,
+    pkg: readPackageJson(dir),
+    src: out,
+    icon: path.join(out, "icon.ico"),
+    out: dest,
+    signCmd,
+  });
   try {
     win.makeInstaller({ makensis, script, out: dest });
   } catch (e) {
@@ -592,7 +642,9 @@ function makeWinInstaller(dir, m, out, version, signtool, plan) {
   }
   if (signtool) winSign(signtool, plan, dest);
   const mb = (fs.statSync(dest).size / 1024 / 1024).toFixed(1);
-  info(`built ${path.relative(process.cwd(), dest)} — ${mb} MB, ${signtool ? "signed" : "unsigned"}; installs per user, no admin`);
+  info(
+    `built ${path.relative(process.cwd(), dest)} — ${mb} MB, ${signtool ? "signed" : "unsigned"}; installs per user, no admin`,
+  );
   return dest;
 }
 
@@ -619,11 +671,21 @@ function signMac(app) {
 }
 
 switch (cmd) {
-  case "create":  create(positional[0]); break;
-  case "typegen": typegen(positional[0] ?? "."); break;
-  case "dev":     await dev(positional[0] ?? "."); break;
-  case "build":   await build(positional[0] ?? "."); break;
-  case "updater": updaterCmd(positional[0], positional.slice(1)); break;
+  case "create":
+    create(positional[0]);
+    break;
+  case "typegen":
+    typegen(positional[0] ?? ".");
+    break;
+  case "dev":
+    await dev(positional[0] ?? ".");
+    break;
+  case "build":
+    await build(positional[0] ?? ".");
+    break;
+  case "updater":
+    updaterCmd(positional[0], positional.slice(1));
+    break;
   default:
     console.log(`kestrel — just React, actually native  (pre-alpha)
 

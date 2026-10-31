@@ -6,8 +6,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeIcons } from "../src/icons.js";
 import {
-  ct, fileVersionOf, findMakensis, installerNameOf, installNameOf, makeInstaller, nsis, nsisScript,
-  publisherOf, signArgs, signCommand, signingPlan,
+  ct,
+  fileVersionOf,
+  findMakensis,
+  installerNameOf,
+  installNameOf,
+  makeInstaller,
+  nsis,
+  nsisScript,
+  publisherOf,
+  signArgs,
+  signCommand,
+  signingPlan,
 } from "../src/windows.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -37,10 +47,32 @@ test("runtime and compile-time NSIS strings", () => {
 });
 
 test("signing plan, arguments and the uninstaller's command", () => {
-  assert.deepEqual(signingPlan({}), { pfx: null, password: "", timestamp: "http://timestamp.digicert.com", orphanPassword: false });
+  assert.deepEqual(signingPlan({}), {
+    pfx: null,
+    password: "",
+    timestamp: "http://timestamp.digicert.com",
+    orphanPassword: false,
+  });
   assert.equal(signingPlan({ KESTREL_WIN_SIGN_PASSWORD: "x" }).orphanPassword, true);
-  const plan = signingPlan({ KESTREL_WIN_SIGN_PFX: "C:\\certs\\my cert.pfx", KESTREL_WIN_SIGN_PASSWORD: "p$w", KESTREL_WIN_TIMESTAMP_URL: "http://ts" });
-  assert.deepEqual(signArgs(plan, "a.exe"), ["sign", "/fd", "SHA256", "/f", "C:\\certs\\my cert.pfx", "/p", "p$w", "/tr", "http://ts", "/td", "SHA256", "a.exe"]);
+  const plan = signingPlan({
+    KESTREL_WIN_SIGN_PFX: "C:\\certs\\my cert.pfx",
+    KESTREL_WIN_SIGN_PASSWORD: "p$w",
+    KESTREL_WIN_TIMESTAMP_URL: "http://ts",
+  });
+  assert.deepEqual(signArgs(plan, "a.exe"), [
+    "sign",
+    "/fd",
+    "SHA256",
+    "/f",
+    "C:\\certs\\my cert.pfx",
+    "/p",
+    "p$w",
+    "/tr",
+    "http://ts",
+    "/td",
+    "SHA256",
+    "a.exe",
+  ]);
   assert.deepEqual(signArgs({ ...plan, password: "" }, "a.exe").includes("/p"), false);
   assert.equal(
     signCommand("C:\\Program Files\\signtool.exe", plan),
@@ -63,14 +95,23 @@ const tmpPortable = (appId) => {
 test("the script installs per user, registers an uninstaller and checks WebView2", () => {
   const { tmp, src } = tmpPortable("notes");
   const m = { appId: "notes", title: "My $Notes" };
-  const s = nsisScript({ m, version: "1.0.0", src, icon: path.join(src, "icon.ico"), out: path.join(tmp, "setup.exe") });
+  const s = nsisScript({
+    m,
+    version: "1.0.0",
+    src,
+    icon: path.join(src, "icon.ico"),
+    out: path.join(tmp, "setup.exe"),
+  });
   const signed = nsisScript({ m, version: "1", src, icon: "i.ico", out: "o.exe", signCmd: '"st" sign "%1"' });
   fs.rmSync(tmp, { recursive: true });
   assert.match(s, /^RequestExecutionLevel user$/m);
   assert.match(s, /^InstallDir "\$LOCALAPPDATA\\Programs\\My \$\$Notes"$/m, "runtime string: $ escaped");
   assert.match(s, /^VIAddVersionKey "ProductName" "My \$Notes"$/m, "compile-time string: $ as is");
   assert.match(s, /CreateShortCut "\$SMPROGRAMS\\My \$\$Notes\.lnk" "\$INSTDIR\\notes\.exe" "" "\$INSTDIR\\icon\.ico"/);
-  assert.match(s, /WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\notes" "QuietUninstallString"/);
+  assert.match(
+    s,
+    /WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\notes" "QuietUninstallString"/,
+  );
   assert.match(s, /EdgeUpdate\\Clients\\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5\}/);
   assert.match(s, /MicrosoftEdgeWebview2Setup\.exe" \/silent \/install/);
   assert.match(s, /^\s+DeleteRegKey HKCU/m);
@@ -84,7 +125,18 @@ test("makensis builds the installer", { skip: !makensis && "no makensis here" },
   const { tmp, src } = tmpPortable("notes");
   const m = { appId: "notes", title: 'My $Notes "Pro"' };
   const out = path.join(tmp, installerNameOf(m, "1.2.0-rc.1", "x64"));
-  makeInstaller({ makensis, script: nsisScript({ m, version: "1.2.0-rc.1", pkg: { author: "Ada <a@b>" }, src, icon: path.join(src, "icon.ico"), out }), out });
+  makeInstaller({
+    makensis,
+    script: nsisScript({
+      m,
+      version: "1.2.0-rc.1",
+      pkg: { author: "Ada <a@b>" },
+      src,
+      icon: path.join(src, "icon.ico"),
+      out,
+    }),
+    out,
+  });
   const exe = fs.readFileSync(out);
   assert.equal(exe.subarray(0, 2).toString(), "MZ");
   const has = (t) => exe.includes(Buffer.from(t, "utf16le"));

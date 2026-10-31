@@ -60,7 +60,10 @@ test("editing native.ts or a file it imports rebuilds the bundle (#21)", async (
 
   // A new import joins the watched set.
   fs.writeFileSync(path.join(app.dir, "extra.ts"), `export const m = 40;`);
-  await app.write("native.ts", `import { n } from "./lib";\nimport { m } from "./extra";\nexport function value(): number { return n + m; }`);
+  await app.write(
+    "native.ts",
+    `import { n } from "./lib";\nimport { m } from "./extra";\nexport function value(): number { return n + m; }`,
+  );
   e = await app.next();
   assert.equal(app.run(e.ok).value(), 42);
   app.drain();

@@ -15,7 +15,10 @@ import { execFileSync } from "node:child_process";
 
 /** Debian package names: lowercase letters, digits, `+ - .`, starting alphanumeric. */
 export function debNameOf(m) {
-  const name = m.appId.toLowerCase().replace(/[^a-z0-9+.-]+/g, "-").replace(/^[^a-z0-9]+/, "");
+  const name = m.appId
+    .toLowerCase()
+    .replace(/[^a-z0-9+.-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "");
   return name.length >= 2 ? name : `${name}-app`;
 }
 
@@ -25,12 +28,15 @@ export function debNameOf(m) {
  * with a digit.
  */
 export function debVersionOf(version) {
-  const v = String(version).replace(/-/g, "~").replace(/[^A-Za-z0-9.+~]/g, ".");
+  const v = String(version)
+    .replace(/-/g, "~")
+    .replace(/[^A-Za-z0-9.+~]/g, ".");
   return /^[0-9]/.test(v) ? v : `0~${v}`;
 }
 
 /** Debian's name for the CPU, or null for one it doesn't build. */
-export const debArchOf = (arch = process.arch) => ({ x64: "amd64", arm64: "arm64", arm: "armhf", ia32: "i386" })[arch] ?? null;
+export const debArchOf = (arch = process.arch) =>
+  ({ x64: "amd64", arm64: "arm64", arm: "armhf", ia32: "i386" })[arch] ?? null;
 
 /** Who the package says maintains it: package.json `author`, else a placeholder. */
 export function maintainerOf(pkg, m) {
@@ -40,7 +46,10 @@ export function maintainerOf(pkg, m) {
   return `${m.title} developers <noreply@${debNameOf(m)}.invalid>`;
 }
 
-const oneLine = (s) => String(s).replace(/[\r\n]+/g, " ").trim();
+const oneLine = (s) =>
+  String(s)
+    .replace(/[\r\n]+/g, " ")
+    .trim();
 
 /**
  * The `.desktop` entry the app menu reads. `exec` defaults to the /usr/bin
@@ -129,7 +138,11 @@ export function tar(entries, mtime) {
     if (Buffer.byteLength(linkname) > 100) pax.push(paxRecord("linkpath", linkname));
     if (pax.length) {
       const body = Buffer.from(pax.join(""));
-      out.push(tarHeader({ name: "././@PaxHeader", type: "x", mode: 0o644, size: body.length, mtime }), body, pad512(body.length));
+      out.push(
+        tarHeader({ name: "././@PaxHeader", type: "x", mode: 0o644, size: body.length, mtime }),
+        body,
+        pad512(body.length),
+      );
     }
     const data = e.type === "file" ? e.data : Buffer.alloc(0);
     const type = { file: "0", dir: "5", symlink: "2" }[e.type];
@@ -152,7 +165,15 @@ export function ar(members, mtime) {
   for (const [name, data] of members) {
     const field = (s, w) => String(s).padEnd(w, " ");
     out.push(
-      Buffer.from(field(name, 16) + field(mtime, 12) + field(0, 6) + field(0, 6) + field("100644", 8) + field(data.length, 10) + "`\n"),
+      Buffer.from(
+        field(name, 16) +
+          field(mtime, 12) +
+          field(0, 6) +
+          field(0, 6) +
+          field("100644", 8) +
+          field(data.length, 10) +
+          "`\n",
+      ),
       data,
     );
     if (data.length % 2) out.push(Buffer.from("\n"));
@@ -196,7 +217,11 @@ export function debPackage({ m, dir, version, arch, icons, pkg = {}, mtime = Mat
   const app = walk(dir, opt, path.join(dir, m.appId));
   const extra = [
     { path: `./usr/bin/${name}`, type: "symlink", target: `/opt/${name}/${m.appId}` },
-    { path: `./usr/share/applications/${name}.desktop`, type: "file", data: Buffer.from(desktopEntry(m, { name, comment: pkg.description })) },
+    {
+      path: `./usr/share/applications/${name}.desktop`,
+      type: "file",
+      data: Buffer.from(desktopEntry(m, { name, comment: pkg.description })),
+    },
     ...Object.entries(icons)
       .filter(([s]) => Number(s) <= 512)
       .map(([s, png]) => ({ path: `./usr/share/icons/hicolor/${s}x${s}/apps/${name}.png`, type: "file", data: png })),
@@ -264,15 +289,21 @@ const sha256 = (b) => crypto.createHash("sha256").update(b).digest("hex");
  * The runtime for `arch`, verified. Uses KESTREL_APPIMAGE_RUNTIME if set,
  * else the cache, else downloads it into the cache.
  */
-export async function appImageRuntime(arch, { env = process.env, cacheDir, fetchImpl = fetch, pins = RUNTIME_SHA256 } = {}) {
+export async function appImageRuntime(
+  arch,
+  { env = process.env, cacheDir, fetchImpl = fetch, pins = RUNTIME_SHA256 } = {},
+) {
   const want = pins[arch];
   if (!want) throw new Error(`no AppImage runtime for ${arch}`);
   const check = (b, from) => {
     if (sha256(b) !== want)
-      throw new Error(`the AppImage runtime from ${from} doesn't match the pinned SHA-256 for runtime-${arch} ${RUNTIME_RELEASE}`);
+      throw new Error(
+        `the AppImage runtime from ${from} doesn't match the pinned SHA-256 for runtime-${arch} ${RUNTIME_RELEASE}`,
+      );
     return b;
   };
-  if (env.KESTREL_APPIMAGE_RUNTIME) return check(fs.readFileSync(env.KESTREL_APPIMAGE_RUNTIME), env.KESTREL_APPIMAGE_RUNTIME);
+  if (env.KESTREL_APPIMAGE_RUNTIME)
+    return check(fs.readFileSync(env.KESTREL_APPIMAGE_RUNTIME), env.KESTREL_APPIMAGE_RUNTIME);
   const dir = cacheDir ?? path.join(env.XDG_CACHE_HOME || path.join(env.HOME || "/tmp", ".cache"), "kestrel");
   const cached = path.join(dir, `appimage-runtime-${RUNTIME_RELEASE}-${arch}`);
   if (fs.existsSync(cached)) return check(fs.readFileSync(cached), cached);
@@ -298,7 +329,12 @@ export function appDir({ m, dir, root, version, icons, pkg = {} }) {
   fs.mkdirSync(path.dirname(lib), { recursive: true });
   fs.cpSync(dir, lib, { recursive: true, verbatimSymlinks: true });
   fs.symlinkSync(`usr/lib/${name}/${m.appId}`, path.join(root, "AppRun"));
-  const entry = desktopEntry(m, { name, comment: pkg.description, exec: name, extra: { "X-AppImage-Version": version } });
+  const entry = desktopEntry(m, {
+    name,
+    comment: pkg.description,
+    exec: name,
+    extra: { "X-AppImage-Version": version },
+  });
   fs.writeFileSync(path.join(root, `${name}.desktop`), entry);
   fs.writeFileSync(path.join(root, `${name}.png`), icons[256]);
   fs.symlinkSync(`${name}.png`, path.join(root, ".DirIcon"));

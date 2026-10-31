@@ -47,7 +47,10 @@ test("an invalid manifest lists every problem before anything launches", () => {
 
 test("a missing native module is caught before launch", () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
+  fs.writeFileSync(
+    path.join(dir, "kestrel.json"),
+    JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }),
+  );
   const res = run(["typegen", dir]);
   assert.equal(res.status, 1);
   assert.match(res.stderr, /`native` points at native\.ts, which doesn't exist/);
@@ -69,8 +72,14 @@ test("typegen outside an app explains what's missing", () => {
 
 test("typegen reports a user error in native.ts without a stack trace", () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
-  fs.writeFileSync(path.join(dir, "native.ts"), "interface X { a: number }\nexport function f(args: X): number { return 1; }\n");
+  fs.writeFileSync(
+    path.join(dir, "kestrel.json"),
+    JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "native.ts"),
+    "interface X { a: number }\nexport function f(args: X): number { return 1; }\n",
+  );
   const res = run(["typegen", dir]);
   assert.equal(res.status, 1);
   assert.match(res.stderr, /`f` uses type `X`, which is not exported/);
@@ -79,7 +88,10 @@ test("typegen reports a user error in native.ts without a stack trace", () => {
 
 test("typegen warns about non-function exports", () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }));
+  fs.writeFileSync(
+    path.join(dir, "kestrel.json"),
+    JSON.stringify({ appId: "a", title: "A", frontend: ".", native: "native.ts" }),
+  );
   fs.writeFileSync(path.join(dir, "native.ts"), "export const V = 1;\nexport function f(): number { return 1; }\n");
   const res = run(["typegen", dir]);
   assert.equal(res.status, 0);
@@ -88,9 +100,15 @@ test("typegen warns about non-function exports", () => {
 });
 
 test("fs:all prints a loud warning; fs:app-data does not", () => {
-  for (const [perm, warns] of [["fs:all", true], ["fs:app-data", false]]) {
+  for (const [perm, warns] of [
+    ["fs:all", true],
+    ["fs:app-data", false],
+  ]) {
     const dir = tmp();
-    fs.writeFileSync(path.join(dir, "kestrel.json"), JSON.stringify({ appId: "a", title: "A", frontend: ".", permissions: [perm] }));
+    fs.writeFileSync(
+      path.join(dir, "kestrel.json"),
+      JSON.stringify({ appId: "a", title: "A", frontend: ".", permissions: [perm] }),
+    );
     const res = run(["typegen", dir]);
     assert.equal(/`fs:all` lets native code read and write every file/.test(res.stderr), warns, perm);
   }

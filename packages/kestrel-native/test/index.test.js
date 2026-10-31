@@ -1,12 +1,31 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store, tray, updater } from "../index.js";
+import {
+  app,
+  appWindow as win,
+  clipboard,
+  dialog,
+  fs,
+  KestrelError,
+  notify,
+  shell,
+  store,
+  tray,
+  updater,
+} from "../index.js";
 
 /** Route invoke() to `impl`, recording each command and its args. */
 function fakeHost(impl) {
   const calls = [];
   globalThis.window = {
-    __TAURI__: { core: { invoke: async (cmd, args) => (calls.push([cmd, args]), impl(cmd, args)) } },
+    __TAURI__: {
+      core: {
+        invoke: async (cmd, args) => {
+          calls.push([cmd, args]);
+          return impl(cmd, args);
+        },
+      },
+    },
   };
   return calls;
 }
@@ -109,7 +128,10 @@ test("tray maps onto its commands and splits its event by kind", async () => {
   const calls = fakeHost(() => true);
   const listeners = [];
   globalThis.window.__TAURI__.event = {
-    listen: async (name, cb) => (listeners.push([name, cb]), () => {}),
+    listen: async (name, cb) => {
+      listeners.push([name, cb]);
+      return () => {};
+    },
   };
   const menu = [{ id: "show", label: "Show" }, { type: "separator" }];
   await tray.create({ tooltip: "T", menu, closeToTray: true });
@@ -125,17 +147,18 @@ test("tray maps onto its commands and splits its event by kind", async () => {
   assert.ok(listeners.every(([name]) => name === "kestrel:tray"));
   for (const payload of [{ kind: "menu", id: "show" }, { kind: "click" }, { kind: "menu", id: "mute", checked: false }])
     for (const [, cb] of listeners) cb({ payload });
-  assert.deepEqual(got, [
-    ["menu", { id: "show" }],
-    ["click"],
-    ["menu", { id: "mute", checked: false }],
-  ]);
+  assert.deepEqual(got, [["menu", { id: "show" }], ["click"], ["menu", { id: "mute", checked: false }]]);
   assert.equal(typeof off, "function");
 });
 
 test("updater maps onto its commands", async () => {
-  const calls = fakeHost((cmd) => (cmd === "updater_check" ? { version: "2.0.0", notes: null, pubDate: null, canApply: true } : false));
+  const calls = fakeHost((cmd) =>
+    cmd === "updater_check" ? { version: "2.0.0", notes: null, pubDate: null, canApply: true } : false,
+  );
   assert.equal((await updater.check()).version, "2.0.0");
   assert.equal(await updater.apply(), false);
-  assert.deepEqual(calls, [["updater_check", undefined], ["updater_apply", undefined]]);
+  assert.deepEqual(calls, [
+    ["updater_check", undefined],
+    ["updater_apply", undefined],
+  ]);
 });

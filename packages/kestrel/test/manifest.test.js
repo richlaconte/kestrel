@@ -34,7 +34,13 @@ test("each problem names its field", () => {
 test("the published schema lists the same fields as the validator", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "schema", "kestrel.schema.json"), "utf8"));
   for (const k of Object.keys(schema.properties))
-    assert.deepEqual(validateManifest({ ...ok, [k]: ok[k] ?? (k === "native" ? "n.ts" : k === "$schema" ? "x" : 1) }).filter((e) => e.includes("not a known field")), [], k);
+    assert.deepEqual(
+      validateManifest({ ...ok, [k]: ok[k] ?? (k === "native" ? "n.ts" : k === "$schema" ? "x" : 1) }).filter((e) =>
+        e.includes("not a known field"),
+      ),
+      [],
+      k,
+    );
   assert.deepEqual(schema.required.sort(), ["appId", "frontend", "title"]);
 });
 
@@ -53,10 +59,16 @@ test("permissions: known names only, no duplicates", () => {
 
 test("CLI, schema and host agree on the permission names", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "schema", "kestrel.schema.json"), "utf8"));
-  assert.deepEqual(schema.properties.permissions.items.oneOf.map((o) => o.const), PERMISSIONS);
+  assert.deepEqual(
+    schema.properties.permissions.items.oneOf.map((o) => o.const),
+    PERMISSIONS,
+  );
   const host = fs.readFileSync(path.join(ROOT, "..", "..", "host", "src", "scope.rs"), "utf8");
   const known = host.match(/pub const KNOWN: &\[&str\] = &\[([^\]]*)\]/)[1];
-  assert.deepEqual([...known.matchAll(/"([^"]+)"/g)].map((x) => x[1]), PERMISSIONS);
+  assert.deepEqual(
+    [...known.matchAll(/"([^"]+)"/g)].map((x) => x[1]),
+    PERMISSIONS,
+  );
 });
 
 test("version is an optional non-empty string", () => {
@@ -68,7 +80,17 @@ test("version is an optional non-empty string", () => {
 test("window options: types, enum and min/max order", () => {
   const errs = (o) => validateManifest({ ...ok, ...o }).join("\n");
   assert.equal(
-    errs({ resizable: false, center: true, decorations: false, rememberWindow: false, titleBarStyle: "overlay", width: 800, minWidth: 400, maxWidth: 1200, minHeight: 300 }),
+    errs({
+      resizable: false,
+      center: true,
+      decorations: false,
+      rememberWindow: false,
+      titleBarStyle: "overlay",
+      width: 800,
+      minWidth: 400,
+      maxWidth: 1200,
+      minHeight: 300,
+    }),
     "",
   );
   assert.match(errs({ resizable: "no" }), /`resizable` must be true or false/);
@@ -83,7 +105,10 @@ test("CLI and host agree on the window fields", () => {
   const host = fs.readFileSync(path.join(ROOT, "..", "..", "host", "src", "window.rs"), "utf8");
   const struct = host.match(/pub struct WindowOptions \{([\s\S]*?)\n\}/)[1];
   const camel = (s) => s.replace(/_(\w)/g, (_, c) => c.toUpperCase());
-  assert.deepEqual([...struct.matchAll(/pub (\w+):/g)].map((x) => camel(x[1])), WINDOW_FIELDS);
+  assert.deepEqual(
+    [...struct.matchAll(/pub (\w+):/g)].map((x) => camel(x[1])),
+    WINDOW_FIELDS,
+  );
 });
 
 test("icon and bundleId (#24, #27)", () => {

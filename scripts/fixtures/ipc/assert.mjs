@@ -13,7 +13,12 @@ assert.deepEqual(r.rejects, { ok: false, code: "native_function", error: "nope",
 assert.deepEqual(r.throws, { ok: false, code: "native_function", error: "sync nope", detail: fn("throws") });
 assert.equal(r.neverSettles.code, "native_function");
 assert.match(r.neverSettles.error, /never settled/);
-assert.deepEqual(r.missing, { ok: false, code: "not_found", error: "no native function: missing", detail: fn("missing") });
+assert.deepEqual(r.missing, {
+  ok: false,
+  code: "not_found",
+  error: "no native function: missing",
+  detail: fn("missing"),
+});
 assert.equal(r.readMissing.code, "not_found");
 assert.match(r.readMissing.error, /^does-not-exist\.txt: /);
 assert.equal(r.escape.code, "permission_denied");

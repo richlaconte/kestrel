@@ -28,6 +28,20 @@ NSIS.NSIS`). The CLI finds `makensis` on `PATH` or in `Program Files (x86)\NSIS`
 Reinstalling or upgrading replaces the app's files. The app's data lives in
 `%APPDATA%\<appId>`, so it survives both reinstalls and uninstalls.
 
+## The .exe's icon and details
+
+Every build gives the app's `.exe` its own resources, so Explorer, the taskbar and file
+Properties show your app rather than Kestrel:
+
+- **Icon:** every size from your `icon`.
+- **Details tab:** product name and description (`title`), file and product version
+  (`version`), company and copyright (package.json `author`), and the original file name.
+
+This happens with or without `--installer`, and before signing, so the signature covers
+it. The host's application manifest (DPI awareness, modern common controls) is kept. If
+a future host binary has a layout the CLI can't rewrite, the build warns and keeps
+Kestrel's resources instead of failing.
+
 ## Signing
 
 Unsigned installers trigger SmartScreen's "Windows protected your PC" warning. To sign,
@@ -51,9 +65,6 @@ until the app builds up reputation. An EV certificate is trusted right away.
 
 ## Not yet
 
-- **The `.exe`'s own icon and version resources** are still the Kestrel host's. Shortcuts,
-  Apps & features and the taskbar show your icon, but Explorer shows Kestrel's on the
-  `.exe` file itself.
 - Azure Trusted Signing and certificates on hardware tokens. For those, sign the files in
   `build\` with your own `signtool` command after the build.
 - MSI packages, for managed deployment through Group Policy or Intune.

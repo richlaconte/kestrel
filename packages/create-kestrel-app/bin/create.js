@@ -12,14 +12,7 @@ try {
   cli = require.resolve("kestreljs/bin/kestrel.js");
 } catch {
   // monorepo fallback
-  cli = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "kestrel",
-    "bin",
-    "kestrel.js",
-  );
+  cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "kestrel", "bin", "kestrel.js");
 }
 const r = spawnSync(process.execPath, [cli, "create", ...process.argv.slice(2)], {
   stdio: "inherit",

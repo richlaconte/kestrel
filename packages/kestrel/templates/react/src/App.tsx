@@ -4,15 +4,29 @@ import { greet, visitCount } from "../native-client";
 
 const styles: Record<string, React.CSSProperties> = {
   body: {
-    margin: 0, minHeight: "100vh", display: "grid", placeItems: "center",
-    fontFamily: "system-ui, sans-serif", background: "#F7F8FA", color: "#1C2430",
+    margin: 0,
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    fontFamily: "system-ui, sans-serif",
+    background: "#F7F8FA",
+    color: "#1C2430",
   },
   main: { width: "min(520px, 90vw)", textAlign: "center" },
   h1: { fontSize: 28, margin: "0 0 4px" },
   accent: { color: "#B4502A" },
   visits: { fontFamily: "monospace", fontSize: 13, color: "#7A8798", marginBottom: 24 },
   input: { font: "15px system-ui", padding: "9px 14px", borderRadius: 8, border: "1px solid #D9DEE6", width: 200 },
-  button: { font: "600 15px system-ui", padding: "9px 18px", borderRadius: 8, border: 0, background: "#B4502A", color: "#fff", cursor: "pointer", marginLeft: 8 },
+  button: {
+    font: "600 15px system-ui",
+    padding: "9px 18px",
+    borderRadius: 8,
+    border: 0,
+    background: "#B4502A",
+    color: "#fff",
+    cursor: "pointer",
+    marginLeft: 8,
+  },
   msg: { marginTop: 16, minHeight: "1.4em", color: "#2E7D4F", fontFamily: "monospace", fontSize: 13.5 },
   hint: { marginTop: 28, fontSize: 13, color: "#7A8798" },
 };
@@ -37,17 +51,11 @@ export default function App() {
           <span style={styles.accent}>React</span>, running native
         </h1>
         <div style={styles.visits}>
-          {visits === null
-            ? "…"
-            : `opened ${visits} time${visits === 1 ? "" : "s"} — persisted by native.ts`}
+          {visits === null ? "…" : `opened ${visits} time${visits === 1 ? "" : "s"} — persisted by native.ts`}
         </div>
-        <input
-          style={styles.input}
-          placeholder="Your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input style={styles.input} placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
         <button
+          type="button"
           style={styles.button}
           onClick={async () => setMsg(await greet({ name: name || "stranger" }))}
         >

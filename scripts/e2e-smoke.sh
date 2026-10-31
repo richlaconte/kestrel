@@ -140,6 +140,10 @@ if [ -n "$WINDOWS" ]; then
   for f in "$SETUP" "build/smoke-app/smoke-app.exe"; do
     [ "$(signer "$f" | tr -d '\r')" = "CN=Kestrel e2e" ] || { echo "FAIL: $f isn't signed" >&2; exit 1; }
   done
+  # The .exe carries the app's own version info, read through Windows (#25).
+  verinfo() { powershell -NoProfile -Command "(Get-Item '$(cygpath -w "$1")').VersionInfo.$2" | tr -d '\r'; }
+  [ "$(verinfo build/smoke-app/smoke-app.exe ProductName)" = smoke-app ] || { echo "FAIL: ProductName is $(verinfo build/smoke-app/smoke-app.exe ProductName)" >&2; exit 1; }
+  [ "$(verinfo build/smoke-app/smoke-app.exe OriginalFilename)" = smoke-app.exe ] || { echo "FAIL: OriginalFilename" >&2; exit 1; }
   KEY='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\smoke-app'
   # Git Bash would turn a bare /S into the path S:/ and the installer would
   # wait on its GUI; the timeout catches any GUI that opens anyway.
