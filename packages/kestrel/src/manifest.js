@@ -1,11 +1,13 @@
 // kestrel.json validation. Mirrors schema/kestrel.schema.json (published for
 // editor autocomplete), with messages that name the field and the fix.
+import { validateUpdater } from "./updater.js";
+
 /** Window fields the host reads (#23). `dev` and `build` copy them into the runtime manifest. */
 export const WINDOW_FIELDS = [
   "resizable", "minWidth", "minHeight", "maxWidth", "maxHeight",
   "center", "decorations", "titleBarStyle", "rememberWindow",
 ];
-const FIELDS = ["$schema", "appId", "title", "version", "bundleId", "icon", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions"];
+const FIELDS = ["$schema", "appId", "title", "version", "bundleId", "icon", "width", "height", ...WINDOW_FIELDS, "frontend", "native", "csp", "permissions", "updater"];
 const TITLE_BAR_STYLES = ["visible", "transparent", "overlay"];
 
 /** Permissions the host understands (RFC-0001 §6). Keep in sync with host/src/scope.rs. */
@@ -72,6 +74,8 @@ export function validateManifest(m) {
         else if (p.indexOf(x) !== i) errs.push(`\`permissions\` lists ${JSON.stringify(x)} twice`);
       });
   }
+
+  if (m.updater !== undefined) errs.push(...validateUpdater(m.updater));
 
   for (const k of Object.keys(m))
     if (!FIELDS.includes(k)) errs.push(`\`${k}\` is not a known field`);

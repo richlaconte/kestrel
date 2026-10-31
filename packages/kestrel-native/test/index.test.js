@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store, tray } from "../index.js";
+import { app, appWindow as win, clipboard, dialog, fs, KestrelError, notify, shell, store, tray, updater } from "../index.js";
 
 /** Route invoke() to `impl`, recording each command and its args. */
 function fakeHost(impl) {
@@ -131,4 +131,11 @@ test("tray maps onto its commands and splits its event by kind", async () => {
     ["menu", { id: "mute", checked: false }],
   ]);
   assert.equal(typeof off, "function");
+});
+
+test("updater maps onto its commands", async () => {
+  const calls = fakeHost((cmd) => (cmd === "updater_check" ? { version: "2.0.0", notes: null, pubDate: null, canApply: true } : false));
+  assert.equal((await updater.check()).version, "2.0.0");
+  assert.equal(await updater.apply(), false);
+  assert.deepEqual(calls, [["updater_check", undefined], ["updater_apply", undefined]]);
 });

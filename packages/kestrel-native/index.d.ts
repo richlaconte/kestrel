@@ -181,6 +181,35 @@ export declare const tray: {
   onClick(cb: () => void): () => void;
 };
 
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+  pubDate: string | null;
+  /**
+   * False when this copy can't replace itself: in dev, a portable folder,
+   * a .deb (apt updates those), or no build for this OS in the feed.
+   */
+  canApply: boolean;
+}
+
+/**
+ * Auto-update from the feed named by kestrel.json `updater.endpoint`. Every
+ * download is checked against `updater.pubkey` before anything is replaced.
+ * Without `updater` in kestrel.json, calls reject with `unsupported_platform`.
+ */
+export declare const updater: {
+  /** The newer version, or null when this is the latest. */
+  check(): Promise<UpdateInfo | null>;
+  /**
+   * Download, verify and install the newer version, then quit and start it:
+   * on success the promise never settles, because the app exits. Resolves
+   * false when there's nothing newer. A bad signature rejects with
+   * `permission_denied`; a copy that can't replace itself, with
+   * `unsupported_platform`.
+   */
+  apply(): Promise<boolean>;
+};
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /**

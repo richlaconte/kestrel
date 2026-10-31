@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import net from "node:net";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ import { errorFile, watchNative } from "../src/watch.js";
 import { IconError, makeIcons } from "../src/icons.js";
 import * as linux from "../src/linux.js";
 import * as macos from "../src/macos.js";
+import * as updater from "../src/updater.js";
 import * as win from "../src/windows.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -223,6 +224,7 @@ async function dev(dir = ".") {
     icon: iconOf(dir, m),
     frontend: dir, // used only in static mode; host requires it either way
     permissions: m.permissions ?? [],
+    ...(m.updater ? { updater: m.updater } : {}),
   };
   if (compiled) {
     runtime.native = path.resolve(compiled);
@@ -383,6 +385,7 @@ async function build(dir = ".") {
     icon: "icon.png",
     frontend: "app",
     permissions: m.permissions ?? [],
+    ...(m.updater ? { updater: m.updater } : {}),
   };
   if (m.csp !== undefined) runtime.csp = m.csp;
   if (compiled) {
@@ -424,11 +427,104 @@ async function build(dir = ".") {
   }
   const linuxOut = process.platform === "linux" && ["--deb", "--appimage"].some((f) => args.includes(f));
   if (process.platform === "linux" && args.includes("--deb")) makeDeb(dir, m, out, version, icons);
-  if (process.platform === "linux" && args.includes("--appimage")) await makeAppImage(dir, m, out, version, icons);
+  const appImage = process.platform === "linux" && args.includes("--appimage") ? await makeAppImage(dir, m, out, version, icons) : null;
+  let setup;
   if (winSigning) {
-    if (args.includes("--installer")) makeWinInstaller(dir, m, out, version, winSigning.signtool, winSigning.plan);
+    if (args.includes("--installer")) setup = makeWinInstaller(dir, m, out, version, winSigning.signtool, winSigning.plan);
     else console.log("  note: portable build. Add --installer for a setup.exe.");
   } else if (!mac && !linuxOut) console.log("  note: portable build. Add --deb or --appimage for an installable package.");
+
+  signUpdate(dir, m, version, { app: mac ? out : null, appImage, setup });
+}
+
+/**
+ * With `updater` in kestrel.json and KESTREL_UPDATER_KEY set: sign this
+ * platform's update and write build/latest.json for it (#28).
+ */
+function signUpdate(dir, m, version, { app, appImage, setup }) {
+  let key;
+  try {
+    key = updater.loadKey();
+  } catch (e) {
+    die(e.message);
+  }
+  if (!m.updater) {
+    if (key) warn("KESTREL_UPDATER_KEY is set but kestrel.json has no `updater`; not signing an update");
+    return;
+  }
+  if (!key) {
+    info("updater: set KESTREL_UPDATER_KEY to sign this build as an update");
+    return;
+  }
+  let pub;
+  try {
+    pub = updater.publicKeyOf(key);
+  } catch (e) {
+    die(e.message);
+  }
+  if (pub !== m.updater.pubkey)
+    die("KESTREL_UPDATER_KEY doesn't match `updater.pubkey` in kestrel.json: apps would refuse this update");
+  // What the updater replaces: the .app (as a .tar.gz), the AppImage, or
+  // the installer, which it runs.
+  let artifact;
+  if (app) {
+    artifact = path.join(dir, "build", `${path.basename(app)}.tar.gz`);
+    try {
+      // COPYFILE_DISABLE: no AppleDouble ._ files for extended attributes.
+      execFileSync("tar", ["-czf", artifact, "-C", path.dirname(app), path.basename(app)], {
+        stdio: ["ignore", "ignore", "pipe"],
+        env: { ...process.env, COPYFILE_DISABLE: "1" },
+      });
+    } catch (e) {
+      die(`could not pack the update: ${e.stderr?.toString().trim() || e.message}`);
+    }
+  } else artifact = appImage ?? setup;
+  if (!artifact) {
+    warn(`updater: nothing to update from on ${process.platform}: build with ${process.platform === "win32" ? "--installer" : "--appimage"}`);
+    return;
+  }
+  const notes = flag("notes");
+  const f = updater.feed({
+    version,
+    notes,
+    platform: updater.platformKey(),
+    url: path.basename(artifact),
+    signature: updater.sign(fs.readFileSync(artifact), key),
+  });
+  const feedPath = path.join(dir, "build", "latest.json");
+  fs.writeFileSync(feedPath, JSON.stringify(f, null, 2) + "\n");
+  info(`updater: signed ${path.basename(artifact)}; feed in ${path.relative(process.cwd(), feedPath)} (upload both next to ${m.updater.endpoint})`);
+}
+
+/** kestrel updater keygen [file] | merge <latest.json…> [--out=file] */
+function updaterCmd(sub, rest) {
+  if (sub === "keygen") {
+    const file = path.resolve(rest[0] ?? "kestrel-updater.key");
+    if (fs.existsSync(file)) die(`${path.relative(process.cwd(), file)} already exists; not overwriting a signing key`);
+    const { privateKey, publicKey } = updater.keygen();
+    fs.writeFileSync(file, privateKey + "\n", { mode: 0o600 });
+    info(`wrote the private key to ${path.relative(process.cwd(), file)}. Keep it secret and out of git; lose it and installed apps can't be updated.`);
+    console.log(`\nAdd to kestrel.json:\n\n  "updater": {\n    "endpoint": "https://example.com/my-app/latest.json",\n    "pubkey": "${publicKey}"\n  }\n\nThen build with KESTREL_UPDATER_KEY=${path.relative(process.cwd(), file)} to sign updates.`);
+    return;
+  }
+  if (sub === "merge") {
+    const files = rest.filter((a) => !a.startsWith("--"));
+    if (!files.length) die("usage: kestrel updater merge <latest.json…> [--out=latest.json]");
+    let merged;
+    try {
+      merged = updater.mergeFeeds(files.map((f) => JSON.parse(fs.readFileSync(f, "utf8"))));
+    } catch (e) {
+      die(`merge: ${e.message}`);
+    }
+    const text = JSON.stringify(merged, null, 2) + "\n";
+    const out = flag("out");
+    if (out) {
+      fs.writeFileSync(out, text);
+      info(`wrote ${out} (${Object.keys(merged.platforms).join(", ")})`);
+    } else process.stdout.write(text);
+    return;
+  }
+  die("usage: kestrel updater keygen [file] | kestrel updater merge <latest.json…> [--out=file]");
 }
 
 function readPackageJson(dir) {
@@ -466,6 +562,7 @@ async function makeAppImage(dir, m, out, version, icons) {
     fs.rmSync(root, { recursive: true, force: true });
   }
   info(`built ${path.relative(process.cwd(), dest)} — ${(fs.statSync(dest).size / 1024 / 1024).toFixed(1)} MB`);
+  return dest;
 }
 
 function winSign(signtool, plan, file) {
@@ -496,6 +593,7 @@ function makeWinInstaller(dir, m, out, version, signtool, plan) {
   if (signtool) winSign(signtool, plan, dest);
   const mb = (fs.statSync(dest).size / 1024 / 1024).toFixed(1);
   info(`built ${path.relative(process.cwd(), dest)} — ${mb} MB, ${signtool ? "signed" : "unsigned"}; installs per user, no admin`);
+  return dest;
 }
 
 /** Sign (and maybe notarize) a built .app; returns how it ended up signed. */
@@ -525,6 +623,7 @@ switch (cmd) {
   case "typegen": typegen(positional[0] ?? "."); break;
   case "dev":     await dev(positional[0] ?? "."); break;
   case "build":   await build(positional[0] ?? "."); break;
+  case "updater": updaterCmd(positional[0], positional.slice(1)); break;
   default:
     console.log(`kestrel — just React, actually native  (pre-alpha)
 
@@ -536,6 +635,10 @@ switch (cmd) {
   kestrel build [dir]     a signed .app on macOS (--dmg for a disk image), a portable folder
                           elsewhere (on Linux, --deb for a Debian package and
                           --appimage for an AppImage; on Windows, --installer)
+  kestrel updater keygen [file]
+                          make the key that signs updates
+  kestrel updater merge <latest.json…> [--out=file]
+                          join the update feeds built on each OS
 `);
     process.exit(cmd ? 1 : 0);
 }

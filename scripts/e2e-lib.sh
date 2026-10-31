@@ -20,3 +20,10 @@ built_exe() {
     echo "$PWD/build/$1/$1"
   fi
 }
+
+# with_timeout <seconds> <cmd…>: run cmd, killed after <seconds>. macOS has
+# no timeout(1); perl's alarm survives the exec.
+with_timeout() {
+  local s=$1; shift
+  if command -v timeout >/dev/null 2>&1; then timeout "$s" "$@"; else perl -e 'alarm shift; exec { $ARGV[0] } @ARGV or die "$ARGV[0]: $!\n"' "$s" "$@"; fi
+}

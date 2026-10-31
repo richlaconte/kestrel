@@ -17,6 +17,7 @@ mod serve;
 mod stdlib;
 mod store;
 mod tray;
+mod updater;
 mod window;
 
 use error::KestrelError;
@@ -63,6 +64,9 @@ struct Manifest {
     /// bindings beyond logging, a pure sandboxed webview.
     #[serde(default)]
     permissions: Vec<String>,
+    /// Where updates come from and the key that signs them (#28).
+    #[serde(default)]
+    updater: Option<updater::UpdaterConfig>,
     /// Dev only: reload the native module from disk whenever a
     /// `reload-native` line arrives on stdin. `kestrel dev` sends one after
     /// it recompiles native.ts.
@@ -655,6 +659,8 @@ fn main() {
             stdlib::shell_open,
             tray::tray_create,
             tray::tray_destroy,
+            updater::updater_check,
+            updater::updater_apply,
         ])
         .setup(move |app| {
             let _ = app_handle.set(app.handle().clone());
