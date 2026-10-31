@@ -18,14 +18,23 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      # mksquashfs, for the AppImage packaging test.
+      # mksquashfs and makensis, for the packaging tests.
       - if: runner.os == 'Linux'
         run: sudo apt-get install -y squashfs-tools
+      - if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if ! command -v makensis >/dev/null && [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then
+            choco install nsis -y --no-progress
+          fi
       - run: npm install
       - run: npm test
 
   smoke:
     name: create → dev → IPC → build (${{ matrix.os }})
+    # A GUI left waiting for input (an installer, a dialog) fails the job
+    # instead of holding a runner for six hours.
+    timeout-minutes: 45
     strategy:
       # Each platform tells us something different; never cancel the others.
       fail-fast: false
@@ -37,6 +46,13 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
+
+      - name: NSIS (for kestrel build --installer)
+        if: runner.os == 'Windows'
+        run: |
+          if ! command -v makensis >/dev/null && [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then
+            choco install nsis -y --no-progress
+          fi
 
       - name: System deps (webkit2gtk, xvfb, squashfs-tools)
         if: runner.os == 'Linux'

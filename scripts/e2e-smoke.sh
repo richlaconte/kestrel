@@ -56,7 +56,17 @@ fi
 # Both templates: the vanilla one builds from "frontend": ".", which holds
 # build/ itself.
 echo "== build =="
-$KESTREL build . --dmg --deb --appimage # --dmg: macOS only; --deb, --appimage: Linux only
+WINDOWS=; case "$(uname)" in MINGW*|MSYS*) WINDOWS=1 ;; esac
+if [ -n "$WINDOWS" ]; then
+  # #25: sign with a throwaway self-signed certificate, so the build's
+  # signing path runs for real (Windows won't trust it, which is fine here).
+  PFX="$(cygpath -w "$WORK/e2e-sign.pfx")"
+  powershell -NoProfile -Command "\$c = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Kestrel e2e' -CertStoreLocation Cert:\CurrentUser\My; Export-PfxCertificate -Cert \$c -FilePath '$PFX' -Password (ConvertTo-SecureString -String 'e2e-pass' -Force -AsPlainText) | Out-Null; \$c | Remove-Item"
+  export KESTREL_WIN_SIGN_PFX="$PFX" KESTREL_WIN_SIGN_PASSWORD=e2e-pass
+fi
+# --dmg: macOS only; --deb, --appimage: Linux only; --installer: Windows only
+$KESTREL build . --dmg --deb --appimage --installer
+unset KESTREL_WIN_SIGN_PFX KESTREL_WIN_SIGN_PASSWORD
 for f in icon.icns icon.ico 16x16.png 256x256.png 1024x1024.png; do
   test -s "build/icons/$f" || { echo "FAIL: build/icons/$f missing" >&2; exit 1; }
 done
@@ -86,7 +96,7 @@ test -z "$(ls -A "$FOREIGN")" || { echo "FAIL: bundle wrote into its cwd: $(ls -
 echo "OK: bundle ran from $FOREIGN, data stayed in the app data dir — $(cat "$DATA/kestrel-data.json")"
 rm_tree "$FOREIGN"
 
-visits() { node -p 'require(process.argv[1]).visits' "$DATA/kestrel-data.json"; }
+visits() { node -p 'require(process.argv[1]).visits' "$KESTREL_DATA_DIR/kestrel-data.json"; }
 
 # Linux (#26): the AppImage runs. With FUSE it mounts itself; without (some
 # CI runners), it unpacks to a temp dir and runs from there.
@@ -119,4 +129,37 @@ if [ "$(uname)" = Linux ] && command -v dpkg >/dev/null && sudo -n true 2>/dev/n
   sudo dpkg -r smoke-app
   test ! -e /opt/smoke-app || { echo "FAIL: dpkg -r left /opt/smoke-app" >&2; exit 1; }
   echo "OK: $(basename "$DEB") installs, runs from /usr/bin and uninstalls"
+fi
+
+# Windows (#25): the installer is signed, installs per user without a
+# prompt (/S), runs, and uninstalls cleanly.
+if [ -n "$WINDOWS" ]; then
+  echo "== install with the setup.exe =="
+  SETUP="$(ls build/*-setup.exe)"
+  signer() { powershell -NoProfile -Command "(Get-AuthenticodeSignature '$(cygpath -w "$1")').SignerCertificate.Subject"; }
+  for f in "$SETUP" "build/smoke-app/smoke-app.exe"; do
+    [ "$(signer "$f" | tr -d '\r')" = "CN=Kestrel e2e" ] || { echo "FAIL: $f isn't signed" >&2; exit 1; }
+  done
+  KEY='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\smoke-app'
+  # Git Bash would turn a bare /S into the path S:/ and the installer would
+  # wait on its GUI; the timeout catches any GUI that opens anyway.
+  MSYS2_ARG_CONV_EXCL='*' timeout 300 "$SETUP" /S
+  INST_WIN="$(MSYS2_ARG_CONV_EXCL='*' reg query "$KEY" /v InstallLocation | tr -d '\r' | sed -n 's/.*REG_SZ *//p')"
+  INST="$(cygpath -u "$INST_WIN")"
+  trap 'rc=$?; [ -x "$INST/uninstall.exe" ] && MSYS2_ARG_CONV_EXCL="*" timeout 300 "$INST/uninstall.exe" /S "_?=$INST_WIN"; rm_tree "$WORK"; exit $rc' EXIT
+  case "$INST_WIN" in *\\AppData\\Local\\Programs\\smoke-app) ;; *) echo "FAIL: installed to $INST_WIN" >&2; exit 1 ;; esac
+  test -f "$INST/smoke-app.exe" && test -f "$INST/kestrel.json" && test -f "$INST/icon.ico" && test -f "$INST/app/index.html"
+  [ "$(signer "$INST/uninstall.exe" | tr -d '\r')" = "CN=Kestrel e2e" ] || { echo "FAIL: the uninstaller isn't signed" >&2; exit 1; }
+  LNK="$APPDATA/Microsoft/Windows/Start Menu/Programs/smoke-app.lnk"
+  test -f "$LNK" || { echo "FAIL: no Start-menu shortcut" >&2; exit 1; }
+  before=$(visits)
+  ( cd / && KESTREL_EXIT_AFTER_MS=12000 "$INST/smoke-app.exe" )
+  [ "$(visits)" -eq $((before + 1)) ] || { echo "FAIL: the installed app's IPC never ran" >&2; exit 1; }
+  # _?= runs the uninstaller in place and waits; it can't delete itself.
+  MSYS2_ARG_CONV_EXCL='*' timeout 300 "$INST/uninstall.exe" /S "_?=$INST_WIN"
+  ! MSYS2_ARG_CONV_EXCL='*' reg query "$KEY" >/dev/null 2>&1 || { echo "FAIL: the uninstall key is still there" >&2; exit 1; }
+  test ! -e "$LNK" || { echo "FAIL: the shortcut is still there" >&2; exit 1; }
+  test ! -e "$INST/smoke-app.exe" || { echo "FAIL: the app is still installed" >&2; exit 1; }
+  rm_tree "$INST"
+  echo "OK: $(basename "$SETUP") is signed, installs per user, runs and uninstalls"
 fi

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { appLayout, appNameOf, bundleIdOf, infoPlist, signingPlan } from "../src/macos.js";
 
 const m = { appId: "quick-note", title: "Quick <Note> & Co" };
@@ -18,9 +19,10 @@ test("Info.plist names the executable, icon, bundle id and version, escaped", ()
 test("bundle name and layout", () => {
   assert.equal(appNameOf({ appId: "a", title: "A/B: C" }), "A-B- C");
   const l = appLayout("/b/Q.app", m);
-  assert.equal(l.exe, "/b/Q.app/Contents/MacOS/quick-note");
-  assert.equal(l.resources, "/b/Q.app/Contents/Resources");
-  assert.equal(l.plist, "/b/Q.app/Contents/Info.plist");
+  // path.join: the same layout is computed on any OS (tests run on Windows).
+  assert.equal(l.exe, path.join("/b/Q.app", "Contents", "MacOS", "quick-note"));
+  assert.equal(l.resources, path.join("/b/Q.app", "Contents", "Resources"));
+  assert.equal(l.plist, path.join("/b/Q.app", "Contents", "Info.plist"));
 });
 
 test("signing plan: ad hoc, identity only, or identity plus notarization", () => {
