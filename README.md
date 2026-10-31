@@ -167,6 +167,10 @@ achievable. Nobody ships both. That's the gap.
 
 ## Developing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup on each OS, the tests, and what has to
+change together. Report security issues privately, as [SECURITY.md](SECURITY.md)
+describes.
+
 ```sh
 npm install
 npm run build:host          # needs Rust locally, once

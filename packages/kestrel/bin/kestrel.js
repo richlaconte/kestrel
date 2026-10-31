@@ -686,6 +686,10 @@ switch (cmd) {
   case "updater":
     updaterCmd(positional[0], positional.slice(1));
     break;
+  case "--version":
+  case "-v":
+    console.log(JSON.parse(fs.readFileSync(path.join(PKG_ROOT, "package.json"), "utf8")).version);
+    break;
   default:
     console.log(`kestrel — just React, actually native  (pre-alpha)
 
@@ -701,6 +705,7 @@ switch (cmd) {
                           make the key that signs updates
   kestrel updater merge <latest.json…> [--out=file]
                           join the update feeds built on each OS
+  kestrel --version
 `);
-    process.exit(cmd ? 1 : 0);
+    process.exit(!cmd || cmd === "--help" || cmd === "-h" ? 0 : 1);
 }

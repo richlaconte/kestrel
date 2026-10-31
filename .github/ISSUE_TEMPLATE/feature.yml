@@ -1,0 +1,23 @@
+name: Feature request
+description: Something Kestrel should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The app or task, and where Kestrel gets in the way today. Concrete beats general.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+      description: An API sketch, if you have one. How do Electron or Tauri handle it?
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Checks
+      options:
+        - label: I looked at the [roadmap](https://github.com/richlaconte/kestrel/issues/36) and existing issues.
+          required: true

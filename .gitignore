@@ -13,3 +13,6 @@ check-ci.command
 *.log
 mac-demo/
 _to_delete_tarball.tar.gz
+
+# Tauri regenerates these on every host build, for the build machine's OS only.
+host/gen/schemas/

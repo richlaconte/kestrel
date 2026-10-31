@@ -136,7 +136,6 @@ const PAGES = SECTIONS.flatMap((s) => s.pages.map((p) => ({ ...p, section: s.tit
 /** Replaces `<!-- kestrel --help -->` with the CLI's real usage text. */
 function includes(md) {
   return md.replace(/<!-- kestrel --help -->/g, () => {
-    // Usage exits non-zero; its text is what we want.
     const { stdout } = spawnSync(process.execPath, [path.join(ROOT, "packages/kestrel/bin/kestrel.js"), "--help"], {
       encoding: "utf8",
     });
